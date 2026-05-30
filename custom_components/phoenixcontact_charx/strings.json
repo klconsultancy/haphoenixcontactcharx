@@ -31,15 +31,15 @@
       "vehicle_status": {
         "name": "Vehicle Status",
         "state": {
-          "A1": "Not connected",
-          "A2": "Not connected (no supply)",
-          "B1": "Connected",
-          "B2": "Connected (no supply)",
-          "C1": "Charging request",
-          "C2": "Charging",
-          "E0": "Error",
-          "F0": "Unavailable",
-          "IN": "Initialising"
+          "a1": "Not connected",
+          "a2": "Not connected (no supply)",
+          "b1": "Connected",
+          "b2": "Connected (no supply)",
+          "c1": "Charging request",
+          "c2": "Charging",
+          "e0": "Error",
+          "f0": "Unavailable",
+          "in": "Initialising"
         }
       },
       "voltage_l1": { "name": "Voltage L1" },

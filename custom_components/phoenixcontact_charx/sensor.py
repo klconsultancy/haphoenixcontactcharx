@@ -111,8 +111,8 @@ CP_SENSORS: tuple[CharxCpSensorDescription, ...] = (
         key="vehicle_status",
         translation_key="vehicle_status",
         device_class=SensorDeviceClass.ENUM,
-        options=["A1", "A2", "B1", "B2", "C1", "C2", "E0", "F0", "IN"],
-        value_fn=lambda cp: cp.status.vehicle_status,
+        options=["a1", "a2", "b1", "b2", "c1", "c2", "e0", "f0", "in"],
+        value_fn=lambda cp: cp.status.vehicle_status.lower() if cp.status.vehicle_status else None,
     ),
     CharxCpSensorDescription(
         key="voltage_l1",

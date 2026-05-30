@@ -30,14 +30,14 @@ class TestSensors:
         await _setup(hass, config_entry, mock_client)
         state = hass.states.get("sensor.charging_point_1_vehicle_status")
         assert state is not None
-        assert state.state == "A1"
+        assert state.state == "a1"
 
     async def test_vehicle_status_charging(self, hass, config_entry, mock_client):
         data = fake_charx_data()
         data.charging_points[0].status.vehicle_status = "C2"
         await _setup(hass, config_entry, mock_client, data)
         state = hass.states.get("sensor.charging_point_1_vehicle_status")
-        assert state.state == "C2"
+        assert state.state == "c2"
 
     async def test_total_energy_kwh(self, hass, config_entry, mock_client):
         # fixture: energy_active_wh = 12_345_000 → 12345.0 kWh
