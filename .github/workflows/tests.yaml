@@ -15,7 +15,6 @@ jobs:
         with:
           python-version: "3.14"
       - name: Install dependencies
-        run: |
-          pip install aiophoenixcontactcharx pytest-homeassistant-custom-component pytest-cov
+        run: pip install -r requirements.txt
       - name: Run tests
         run: pytest tests/ --cov=custom_components/phoenixcontact_charx --cov-report=term-missing
