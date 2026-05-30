@@ -6,5 +6,5 @@ __pycache__/
 config/
 .devcontainer.json
 .devcontainer-lock.json
-requirements.txt
+requirements-test.txt
 scripts/
