@@ -1,11 +1,11 @@
 {
   "domain": "phoenixcontact_charx",
   "name": "Phoenix Contact CHARX",
-  "version": "0.1.0",
+  "codeowners": ["@kristoflemmens"],
   "config_flow": true,
   "documentation": "https://github.com/klconsultancy/haphoenixcontactcharx",
+  "iot_class": "local_polling",
   "issue_tracker": "https://github.com/klconsultancy/haphoenixcontactcharx/issues",
   "requirements": ["aiophoenixcontactcharx>=0.1.0"],
-  "codeowners": ["@kristoflemmens"],
-  "iot_class": "local_polling"
+  "version": "0.1.0"
 }
