@@ -10,6 +10,9 @@ from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAI
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.components.number import DOMAIN as NUMBER_DOMAIN
 from homeassistant.const import STATE_ON, STATE_OFF, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.exceptions import HomeAssistantError
+
+from aiophoenixcontactcharx import CharxConnectionError
 
 from .conftest import fake_charx_data, fake_cp_data
 
@@ -159,6 +162,24 @@ class TestSwitches:
         )
         mock_client.set_charging_release.assert_awaited_once_with(1, False)
 
+    async def test_turn_on_charging_release_raises_on_write_failure(
+        self, hass, config_entry, mock_client
+    ):
+        mock_client.set_charging_release.side_effect = CharxConnectionError(
+            "device offline"
+        )
+        await _setup(hass, config_entry, mock_client)
+
+        with pytest.raises(
+            HomeAssistantError,
+            match="Failed to enable charging release on CP1: device offline",
+        ):
+            await hass.services.async_call(
+                SWITCH_DOMAIN, "turn_on",
+                {"entity_id": "switch.charging_point_1_charging_release"},
+                blocking=True,
+            )
+
     async def test_availability_switch_on(self, hass, config_entry, mock_client):
         await _setup(hass, config_entry, mock_client)
         state = hass.states.get("switch.charging_point_1_available")
@@ -172,6 +193,24 @@ class TestSwitches:
             blocking=True,
         )
         mock_client.set_availability.assert_awaited_once_with(1, False)
+
+    async def test_turn_off_availability_raises_on_write_failure(
+        self, hass, config_entry, mock_client
+    ):
+        mock_client.set_availability.side_effect = CharxConnectionError(
+            "device offline"
+        )
+        await _setup(hass, config_entry, mock_client)
+
+        with pytest.raises(
+            HomeAssistantError,
+            match="Failed to set CP1 to status F: device offline",
+        ):
+            await hass.services.async_call(
+                SWITCH_DOMAIN, "turn_off",
+                {"entity_id": "switch.charging_point_1_available"},
+                blocking=True,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +232,24 @@ class TestNumbers:
         )
         mock_client.set_max_current.assert_awaited_once_with(1, 11)
 
+    async def test_set_max_current_raises_on_write_failure(
+        self, hass, config_entry, mock_client
+    ):
+        mock_client.set_max_current.side_effect = CharxConnectionError(
+            "device offline"
+        )
+        await _setup(hass, config_entry, mock_client)
+
+        with pytest.raises(
+            HomeAssistantError,
+            match="Failed to set max current on CP1: device offline",
+        ):
+            await hass.services.async_call(
+                NUMBER_DOMAIN, "set_value",
+                {"entity_id": "number.charging_point_1_max_current", "value": 11},
+                blocking=True,
+            )
+
     async def test_dynamic_max_current_initial_value(self, hass, config_entry, mock_client):
         await _setup(hass, config_entry, mock_client)
         state = hass.states.get("number.charx_dynamic_max_current_group")
@@ -206,3 +263,21 @@ class TestNumbers:
             blocking=True,
         )
         mock_client.set_dynamic_max_current.assert_awaited_once_with(48)
+
+    async def test_set_dynamic_max_current_raises_on_write_failure(
+        self, hass, config_entry, mock_client
+    ):
+        mock_client.set_dynamic_max_current.side_effect = CharxConnectionError(
+            "device offline"
+        )
+        await _setup(hass, config_entry, mock_client)
+
+        with pytest.raises(
+            HomeAssistantError,
+            match="Failed to set dynamic max current on CP group: device offline",
+        ):
+            await hass.services.async_call(
+                NUMBER_DOMAIN, "set_value",
+                {"entity_id": "number.charx_dynamic_max_current_group", "value": 48},
+                blocking=True,
+            )

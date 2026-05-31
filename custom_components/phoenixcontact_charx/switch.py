@@ -8,6 +8,7 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from aiophoenixcontactcharx import CharxConnectionError, CharxModbusError
@@ -46,9 +47,11 @@ class CharxChargingReleaseSwitch(CharxChargingPointEntity, SwitchEntity):
                 self._charging_point, True
             )
         except (CharxConnectionError, CharxModbusError) as err:
-            _LOGGER.error("Failed to enable charging release on CP%d: %s",
-                          self._charging_point, err)
-            return
+            message = (
+                f"Failed to enable charging release on CP{self._charging_point}: {err}"
+            )
+            _LOGGER.error(message)
+            raise HomeAssistantError(message) from err
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -57,9 +60,11 @@ class CharxChargingReleaseSwitch(CharxChargingPointEntity, SwitchEntity):
                 self._charging_point, False
             )
         except (CharxConnectionError, CharxModbusError) as err:
-            _LOGGER.error("Failed to disable charging release on CP%d: %s",
-                          self._charging_point, err)
-            return
+            message = (
+                f"Failed to disable charging release on CP{self._charging_point}: {err}"
+            )
+            _LOGGER.error(message)
+            raise HomeAssistantError(message) from err
         await self.coordinator.async_request_refresh()
 
 
@@ -90,9 +95,9 @@ class CharxAvailabilitySwitch(CharxChargingPointEntity, SwitchEntity):
                 self._charging_point, True
             )
         except (CharxConnectionError, CharxModbusError) as err:
-            _LOGGER.error("Failed to set CP%d available: %s",
-                          self._charging_point, err)
-            return
+            message = f"Failed to set CP{self._charging_point} available: {err}"
+            _LOGGER.error(message)
+            raise HomeAssistantError(message) from err
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -101,9 +106,9 @@ class CharxAvailabilitySwitch(CharxChargingPointEntity, SwitchEntity):
                 self._charging_point, False
             )
         except (CharxConnectionError, CharxModbusError) as err:
-            _LOGGER.error("Failed to set CP%d to status F: %s",
-                          self._charging_point, err)
-            return
+            message = f"Failed to set CP{self._charging_point} to status F: {err}"
+            _LOGGER.error(message)
+            raise HomeAssistantError(message) from err
         await self.coordinator.async_request_refresh()
 
 
