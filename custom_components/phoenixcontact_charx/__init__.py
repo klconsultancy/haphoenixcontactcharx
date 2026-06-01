@@ -31,7 +31,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: CharxConfigEntry) -> boo
     dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, mac)},
-        name="CHARX",
+        name=coordinator.data.device_info.designation or "CHARX SEC",
         manufacturer="Phoenix Contact",
         model=coordinator.data.device_info.designation or "CHARX SEC",
         sw_version=coordinator.data.device_info.software_version,

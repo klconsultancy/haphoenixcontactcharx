@@ -37,7 +37,7 @@ class CharxGlobalSensorDescription(SensorEntityDescription):
     value_fn: Callable[[DeviceInfo], Any] = lambda _: None
 
 
-GLOBAL_SENSORS: tuple[CharxGlobalSensorDescription, ...] = (
+GROUP_SENSORS: tuple[CharxGlobalSensorDescription, ...] = (
     CharxGlobalSensorDescription(
         key="group_active_power",
         translation_key="group_active_power",
@@ -305,7 +305,7 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     entities: list[SensorEntity] = []
 
-    for description in GLOBAL_SENSORS:
+    for description in GROUP_SENSORS:
         entities.append(CharxGlobalSensor(coordinator, description))
 
     for cp in range(1, coordinator.num_charging_points + 1):
