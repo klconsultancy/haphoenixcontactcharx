@@ -29,7 +29,7 @@ from .entity import CharxChargingPointEntity, CharxEntity
 
 
 # ---------------------------------------------------------------------------
-# Global (group-level) sensor descriptions
+# Group-level sensor descriptions
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True, kw_only=True)
