@@ -268,20 +268,20 @@ class TestNumbers:
 
     async def test_dynamic_max_current_initial_value(self, hass, config_entry, mock_client):
         await _setup(hass, config_entry, mock_client)
-        state = hass.states.get("number.charx_sec_3000_dynamic_max_current_group")
+        state = hass.states.get("number.charx_sec_3000_group_dynamic_max_current")
         assert float(state.state) == 32.0  # fixture: dynamic_max_current_a=32
 
     async def test_dynamic_max_current_none_is_unknown(self, hass, config_entry, mock_client):
         data = fake_charx_data(dynamic_max_current_a=None)
         await _setup(hass, config_entry, mock_client, data)
-        state = hass.states.get("number.charx_sec_3000_dynamic_max_current_group")
+        state = hass.states.get("number.charx_sec_3000_group_dynamic_max_current")
         assert state.state == STATE_UNKNOWN
 
     async def test_set_dynamic_max_current_calls_client(self, hass, config_entry, mock_client):
         await _setup(hass, config_entry, mock_client)
         await hass.services.async_call(
             NUMBER_DOMAIN, "set_value",
-            {"entity_id": "number.charx_sec_3000_dynamic_max_current_group", "value": 48},
+            {"entity_id": "number.charx_sec_3000_group_dynamic_max_current", "value": 48},
             blocking=True,
         )
         mock_client.set_dynamic_max_current.assert_awaited_once_with(48)
@@ -300,6 +300,6 @@ class TestNumbers:
         ):
             await hass.services.async_call(
                 NUMBER_DOMAIN, "set_value",
-                {"entity_id": "number.charx_sec_3000_dynamic_max_current_group", "value": 48},
+                {"entity_id": "number.charx_sec_3000_group_dynamic_max_current", "value": 48},
                 blocking=True,
             )
