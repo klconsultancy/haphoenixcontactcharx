@@ -69,7 +69,7 @@
     },
     "number": {
       "max_current": { "name": "Max Current" },
-      "dynamic_max_current_number": { "name": "Dynamic Max Current (Group)" }
+      "dynamic_max_current_number": { "name": "Group Dynamic Max Current" }
     }
   }
 }

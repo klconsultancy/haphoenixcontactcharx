@@ -21,7 +21,7 @@ class CharxEntity(CoordinatorEntity[CharxCoordinator]):
         self._attr_unique_id = f"{mac}_{unique_suffix}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mac)},
-            name="CHARX",
+            name=coordinator.data.device_info.designation or "CHARX SEC",
             manufacturer="Phoenix Contact",
             model=coordinator.data.device_info.designation or "CHARX SEC",
             sw_version=coordinator.data.device_info.software_version,
