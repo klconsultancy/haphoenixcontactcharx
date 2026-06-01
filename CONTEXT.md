@@ -22,7 +22,7 @@ The in-service state of a Charge Point. When off, the Charge Point enters IEC 61
 
 ## Dynamic Max Current
 
-The Group-level current budget in amperes. The Controller distributes this budget internally across active Charge Points — HA sets the ceiling, the Controller handles allocation. Exposed as both a readable sensor (current active value) and a writable number (command to the Controller). Writing and reading back the same register, so they converge after a write.
+The Group-level current budget in amperes. The Controller distributes this budget internally across active Charge Points — HA sets the ceiling, the Controller handles allocation. Exposed as both a readable sensor (current active value) and a writable number (command to the Controller). Both read and write the same Modbus register, so the sensor and number values converge immediately after a write.
 
 ## Load Management
 
