@@ -198,6 +198,12 @@ class TestNumbers:
         state = hass.states.get("number.charx_dynamic_max_current_group")
         assert float(state.state) == 32.0  # fixture: dynamic_max_current_a=32
 
+    async def test_dynamic_max_current_none_is_unknown(self, hass, config_entry, mock_client):
+        data = fake_charx_data(dynamic_max_current_a=None)
+        await _setup(hass, config_entry, mock_client, data)
+        state = hass.states.get("number.charx_dynamic_max_current_group")
+        assert state.state == STATE_UNKNOWN
+
     async def test_set_dynamic_max_current_calls_client(self, hass, config_entry, mock_client):
         await _setup(hass, config_entry, mock_client)
         await hass.services.async_call(

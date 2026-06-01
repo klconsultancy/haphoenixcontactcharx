@@ -73,7 +73,8 @@ class CharxDynamicMaxCurrentNumber(CharxEntity, NumberEntity):
 
     @property
     def native_value(self) -> float | None:
-        return float(self.coordinator.data.device_info.dynamic_max_current_a)
+        value = self.coordinator.data.device_info.dynamic_max_current_a
+        return float(value) if value is not None else None
 
     async def async_set_native_value(self, value: float) -> None:
         current = int(value)
