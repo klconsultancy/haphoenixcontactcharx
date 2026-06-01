@@ -33,12 +33,12 @@ from .entity import CharxChargingPointEntity, CharxEntity
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True, kw_only=True)
-class CharxGlobalSensorDescription(SensorEntityDescription):
+class CharxGroupSensorDescription(SensorEntityDescription):
     value_fn: Callable[[DeviceInfo], Any] = lambda _: None
 
 
-GROUP_SENSORS: tuple[CharxGlobalSensorDescription, ...] = (
-    CharxGlobalSensorDescription(
+GROUP_SENSORS: tuple[CharxGroupSensorDescription, ...] = (
+    CharxGroupSensorDescription(
         key="group_active_power",
         translation_key="group_active_power",
         device_class=SensorDeviceClass.POWER,
@@ -47,7 +47,7 @@ GROUP_SENSORS: tuple[CharxGlobalSensorDescription, ...] = (
         suggested_display_precision=0,
         value_fn=lambda d: round(d.group_active_power_w, 1),
     ),
-    CharxGlobalSensorDescription(
+    CharxGroupSensorDescription(
         key="group_current_l1",
         translation_key="group_current_l1",
         device_class=SensorDeviceClass.CURRENT,
@@ -56,7 +56,7 @@ GROUP_SENSORS: tuple[CharxGlobalSensorDescription, ...] = (
         suggested_display_precision=2,
         value_fn=lambda d: round(d.group_current_l1_a, 2) if d.group_current_l1_a is not None else None,
     ),
-    CharxGlobalSensorDescription(
+    CharxGroupSensorDescription(
         key="group_current_l2",
         translation_key="group_current_l2",
         device_class=SensorDeviceClass.CURRENT,
@@ -65,7 +65,7 @@ GROUP_SENSORS: tuple[CharxGlobalSensorDescription, ...] = (
         suggested_display_precision=2,
         value_fn=lambda d: round(d.group_current_l2_a, 2) if d.group_current_l2_a is not None else None,
     ),
-    CharxGlobalSensorDescription(
+    CharxGroupSensorDescription(
         key="group_current_l3",
         translation_key="group_current_l3",
         device_class=SensorDeviceClass.CURRENT,
@@ -74,19 +74,19 @@ GROUP_SENSORS: tuple[CharxGlobalSensorDescription, ...] = (
         suggested_display_precision=2,
         value_fn=lambda d: round(d.group_current_l3_a, 2) if d.group_current_l3_a is not None else None,
     ),
-    CharxGlobalSensorDescription(
+    CharxGroupSensorDescription(
         key="num_charging",
         translation_key="num_charging",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda d: d.num_charging,
     ),
-    CharxGlobalSensorDescription(
+    CharxGroupSensorDescription(
         key="num_connected",
         translation_key="num_connected",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda d: d.num_status_bcd,
     ),
-    CharxGlobalSensorDescription(
+    CharxGroupSensorDescription(
         key="dynamic_max_current",
         translation_key="dynamic_max_current",
         device_class=SensorDeviceClass.CURRENT,
@@ -249,15 +249,15 @@ CP_SENSORS: tuple[CharxCpSensorDescription, ...] = (
 # Entity classes
 # ---------------------------------------------------------------------------
 
-class CharxGlobalSensor(CharxEntity, SensorEntity):
+class CharxGroupSensor(CharxEntity, SensorEntity):
     """Sensor for group-level data."""
 
-    entity_description: CharxGlobalSensorDescription
+    entity_description: CharxGroupSensorDescription
 
     def __init__(
         self,
         coordinator: Any,
-        description: CharxGlobalSensorDescription,
+        description: CharxGroupSensorDescription,
     ) -> None:
         super().__init__(coordinator, description.key)
         self.entity_description = description
@@ -306,7 +306,7 @@ async def async_setup_entry(
     entities: list[SensorEntity] = []
 
     for description in GROUP_SENSORS:
-        entities.append(CharxGlobalSensor(coordinator, description))
+        entities.append(CharxGroupSensor(coordinator, description))
 
     for cp in range(1, coordinator.num_charging_points + 1):
         for description in CP_SENSORS:
