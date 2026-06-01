@@ -8,6 +8,7 @@ from typing import Any
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.const import UnitOfElectricCurrent
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from aiophoenixcontactcharx import CharxConnectionError, CharxModbusError
@@ -48,12 +49,15 @@ class CharxMaxCurrentNumber(CharxChargingPointEntity, NumberEntity):
         try:
             await self.coordinator.client.set_max_current(self._charging_point, current)
         except ValueError as err:
-            _LOGGER.error("Invalid max current value %d: %s", current, err)
-            return
+            message = f"Invalid max current value {current}: {err}"
+            _LOGGER.error(message)
+            raise HomeAssistantError(message) from err
         except (CharxConnectionError, CharxModbusError) as err:
-            _LOGGER.error("Failed to set max current on CP%d: %s",
-                          self._charging_point, err)
-            return
+            message = (
+                f"Failed to set max current on CP{self._charging_point}: {err}"
+            )
+            _LOGGER.error(message)
+            raise HomeAssistantError(message) from err
         await self.coordinator.async_request_refresh()
 
 
@@ -81,8 +85,9 @@ class CharxDynamicMaxCurrentNumber(CharxEntity, NumberEntity):
         try:
             await self.coordinator.client.set_dynamic_max_current(current)
         except (CharxConnectionError, CharxModbusError) as err:
-            _LOGGER.error("Failed to set dynamic max current: %s", err)
-            return
+            message = f"Failed to set dynamic max current on CP group: {err}"
+            _LOGGER.error(message)
+            raise HomeAssistantError(message) from err
         await self.coordinator.async_request_refresh()
 
 
