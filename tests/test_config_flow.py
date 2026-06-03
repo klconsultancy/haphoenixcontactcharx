@@ -76,20 +76,41 @@ async def test_host_is_stripped(hass, mock_client):
     assert called_host == "192.168.1.1"
 
 
-async def test_num_charging_points_capped_at_12(hass, mock_client):
-    """Device reporting >12 controllers is capped at MAX_CHARGING_POINTS."""
+async def test_cap_warning_shown_when_cp_count_exceeds_max(hass, mock_client):
+    """Device reporting >12 CPs triggers the cap_confirm warning step."""
     with patch(
         "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
         AsyncMock(return_value={
             "title": "CHARX",
             "mac": "00:11:22:33:44:55",
-            "num_charging_points": 50,  # absurd value
+            "num_charging_points": 50,
         }),
     ):
         result = await _init_flow(hass)
         result = await _submit(hass, result["flow_id"])
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "cap_confirm"
+    assert result["description_placeholders"]["detected"] == "50"
+    assert result["description_placeholders"]["cap"] == "12"
+
+
+async def test_num_charging_points_capped_at_12(hass, mock_client):
+    """Confirming the cap warning creates the entry with MAX_CHARGING_POINTS."""
+    with patch(
+        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
+        AsyncMock(return_value={
+            "title": "CHARX",
+            "mac": "00:11:22:33:44:55",
+            "num_charging_points": 50,
+        }),
+    ):
+        result = await _init_flow(hass)
+        result = await _submit(hass, result["flow_id"])
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     await hass.async_block_till_done()
 
+    assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"]["num_charging_points"] == 12
 
 

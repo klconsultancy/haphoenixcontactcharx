@@ -8,6 +8,10 @@
           "host": "IP Address",
           "port": "Modbus TCP Port"
         }
+      },
+      "cap_confirm": {
+        "title": "Charge Point limit reached",
+        "description": "The controller reports {detected} Charge Points, but this integration supports at most {cap} (UM EN CHARX SEC §2.3.3). Only the first {cap} Charge Points will be managed. Click Submit to continue."
       }
     },
     "error": {
