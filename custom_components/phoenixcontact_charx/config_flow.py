@@ -47,6 +47,7 @@ class CharxConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self) -> None:
+        super().__init__()
         self._host: str = ""
         self._port: int = DEFAULT_PORT
         self._probed: dict[str, Any] = {}
@@ -97,6 +98,8 @@ class CharxConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_cap_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        if not self._probed:
+            return await self.async_step_user()
         if user_input is not None:
             return self.async_create_entry(
                 title=self._probed["title"],
