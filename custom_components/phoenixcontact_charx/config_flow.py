@@ -137,7 +137,7 @@ class CharxConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
-            port = user_input[CONF_PORT]
+            port = user_input.get(CONF_PORT, entry.data.get(CONF_PORT, DEFAULT_PORT))
             try:
                 probed = await _validate_and_probe(host, port)
             except CharxConnectionError:
