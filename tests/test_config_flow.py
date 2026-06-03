@@ -210,6 +210,7 @@ async def test_reconfigure_updates_cp_count(hass, config_entry, mock_client):
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     assert config_entry.data["num_charging_points"] == 4
+    assert config_entry.data["mac"] == "AA:BB:CC:DD:EE:FF"  # MAC must not change
 
 
 async def test_reconfigure_shows_cap_warning_when_exceeded(hass, config_entry, mock_client):
@@ -250,6 +251,25 @@ async def test_reconfigure_cap_confirm_caps_at_max(hass, config_entry, mock_clie
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     assert config_entry.data["num_charging_points"] == 12
+
+
+async def test_reconfigure_wrong_device_shows_error(hass, config_entry):
+    """Probed MAC differs from stored MAC → wrong_device error."""
+    with patch(
+        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
+        AsyncMock(return_value={
+            "title": "CHARX SEC-3000",
+            "mac": "11:22:33:44:55:66",  # different from config_entry fixture MAC
+            "num_charging_points": 1,
+        }),
+    ):
+        result = await _init_reconfigure(hass, config_entry)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"host": "192.168.1.200", "port": 502}
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"]["base"] == "wrong_device"
 
 
 async def test_reconfigure_connection_error_shows_error(hass, config_entry):

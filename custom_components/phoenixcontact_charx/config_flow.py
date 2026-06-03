@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PORT
 
 from aiophoenixcontactcharx import CharxClient, CharxConnectionError, CharxError
@@ -111,7 +111,13 @@ class CharxConfigFlow(ConfigFlow, domain=DOMAIN):
             if self._is_reconfigure:
                 entry = self._get_reconfigure_entry()
                 return self.async_update_reload_and_abort(
-                    entry, data={**entry.data, **capped_data}
+                    entry,
+                    data={
+                        **entry.data,
+                        CONF_HOST: self._host,
+                        CONF_PORT: self._port,
+                        CONF_NUM_CHARGING_POINTS: MAX_CHARGING_POINTS,
+                    },
                 )
             return self.async_create_entry(title=self._probed["title"], data=capped_data)
         return self.async_show_form(
@@ -142,21 +148,24 @@ class CharxConfigFlow(ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected error probing %s:%d", host, port)
                 errors["base"] = "unknown"
             else:
-                if probed["num_charging_points"] > MAX_CHARGING_POINTS:
+                if probed["mac"] != entry.data[CONF_MAC]:
+                    errors["base"] = "wrong_device"
+                elif probed["num_charging_points"] > MAX_CHARGING_POINTS:
                     self._host = host
                     self._port = port
                     self._probed = probed
                     self._is_reconfigure = True
                     return await self.async_step_cap_confirm()
-                return self.async_update_reload_and_abort(
-                    entry,
-                    data={
-                        **entry.data,
-                        CONF_HOST: host,
-                        CONF_PORT: port,
-                        CONF_NUM_CHARGING_POINTS: probed["num_charging_points"],
-                    },
-                )
+                else:
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        data={
+                            **entry.data,
+                            CONF_HOST: host,
+                            CONF_PORT: port,
+                            CONF_NUM_CHARGING_POINTS: probed["num_charging_points"],
+                        },
+                    )
 
         return self.async_show_form(
             step_id="reconfigure",

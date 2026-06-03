@@ -25,7 +25,8 @@
     "error": {
       "cannot_connect": "Cannot connect to the controller. Check the IP address, that port 502 is open (WBM → Network → Port Sharing), and that the Modbus server is enabled (WBM → System Control → Status).",
       "modbus_error": "Connected but received a Modbus error. Check that the Modbus server is running.",
-      "unknown": "Unexpected error. Check the Home Assistant logs for details."
+      "unknown": "Unexpected error. Check the Home Assistant logs for details.",
+      "wrong_device": "The controller at this address is a different device. To switch controllers, remove this entry and add it again."
     },
     "abort": {
       "already_configured": "This CHARX controller is already configured."
