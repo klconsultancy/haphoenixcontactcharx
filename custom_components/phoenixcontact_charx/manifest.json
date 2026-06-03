@@ -6,6 +6,6 @@
   "documentation": "https://github.com/klconsultancy/haphoenixcontactcharx",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/klconsultancy/haphoenixcontactcharx/issues",
-  "requirements": ["aiophoenixcontactcharx>=0.1.0"],
+  "requirements": ["aiophoenixcontactcharx>=1.0.0"],
   "version": "0.1.2"
 }
