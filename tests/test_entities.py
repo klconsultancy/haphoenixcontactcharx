@@ -12,10 +12,9 @@ from homeassistant.components.number import DOMAIN as NUMBER_DOMAIN
 from homeassistant.const import STATE_ON, STATE_OFF, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.exceptions import HomeAssistantError
 
-from aiophoenixcontactcharx import CharxConnectionError
+from aiophoenixcontactcharx import CharxConnectionError, CharxData
 
-from .conftest import fake_charx_data, fake_cp_data, fake_device_info
-from aiophoenixcontactcharx import CharxData
+from .conftest import fake_charx_data, fake_device_info
 
 
 async def _setup(hass, config_entry, mock_client, charx_data=None):
@@ -341,4 +340,30 @@ class TestCpDataAvailability:
         await coordinator.async_refresh()
         await hass.async_block_till_done()
         state = hass.states.get("binary_sensor.charging_point_1_connected")
+        assert state.state == STATE_UNKNOWN
+
+    async def test_switch_unknown_when_cp_missing_from_coordinator(
+        self, hass, config_entry, mock_client
+    ):
+        await _setup(hass, config_entry, mock_client)
+        mock_client.fetch_data = AsyncMock(
+            return_value=CharxData(device_info=fake_device_info(), charging_points=[])
+        )
+        coordinator = config_entry.runtime_data
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        state = hass.states.get("switch.charging_point_1_charging_release")
+        assert state.state == STATE_UNKNOWN
+
+    async def test_number_unknown_when_cp_missing_from_coordinator(
+        self, hass, config_entry, mock_client
+    ):
+        await _setup(hass, config_entry, mock_client)
+        mock_client.fetch_data = AsyncMock(
+            return_value=CharxData(device_info=fake_device_info(), charging_points=[])
+        )
+        coordinator = config_entry.runtime_data
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        state = hass.states.get("number.charging_point_1_max_current")
         assert state.state == STATE_UNKNOWN
