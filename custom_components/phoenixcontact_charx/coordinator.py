@@ -45,3 +45,5 @@ class CharxCoordinator(DataUpdateCoordinator[CharxData]):
             raise UpdateFailed(f"Cannot reach CHARX controller: {err}") from err
         except CharxModbusError as err:
             raise UpdateFailed(f"Modbus error from CHARX controller: {err}") from err
+        except TimeoutError as err:
+            raise UpdateFailed(f"Timeout polling CHARX controller after {DEFAULT_POLL_TIMEOUT}s") from err
