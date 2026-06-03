@@ -34,11 +34,7 @@ class CharxChargingReleaseSwitch(CharxChargingPointEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
-        cp_data = next(
-            (cp for cp in self.coordinator.data.charging_points
-             if cp.charging_point == self._charging_point),
-            None,
-        )
+        cp_data = self._cp_data
         return cp_data.control.charging_release if cp_data else None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -82,11 +78,7 @@ class CharxAvailabilitySwitch(CharxChargingPointEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
-        cp_data = next(
-            (cp for cp in self.coordinator.data.charging_points
-             if cp.charging_point == self._charging_point),
-            None,
-        )
+        cp_data = self._cp_data
         return cp_data.control.available if cp_data else None
 
     async def async_turn_on(self, **kwargs: Any) -> None:

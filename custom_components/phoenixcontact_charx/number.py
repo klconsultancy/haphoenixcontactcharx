@@ -37,11 +37,7 @@ class CharxMaxCurrentNumber(CharxChargingPointEntity, NumberEntity):
 
     @property
     def native_value(self) -> float | None:
-        cp_data = next(
-            (cp for cp in self.coordinator.data.charging_points
-             if cp.charging_point == self._charging_point),
-            None,
-        )
+        cp_data = self._cp_data
         return float(cp_data.control.max_current_a) if cp_data else None
 
     async def async_set_native_value(self, value: float) -> None:

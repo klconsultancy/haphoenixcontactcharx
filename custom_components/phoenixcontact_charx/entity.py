@@ -6,6 +6,8 @@ from homeassistant.const import CONF_HOST
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from aiophoenixcontactcharx import ChargingPointData
+
 from .const import DOMAIN
 from .coordinator import CharxCoordinator
 
@@ -48,4 +50,12 @@ class CharxChargingPointEntity(CharxEntity):
             manufacturer="Phoenix Contact",
             model="CHARX SEC",
             via_device=(DOMAIN, mac),
+        )
+
+    @property
+    def _cp_data(self) -> ChargingPointData | None:
+        return next(
+            (cp for cp in self.coordinator.data.charging_points
+             if cp.charging_point == self._charging_point),
+            None,
         )
