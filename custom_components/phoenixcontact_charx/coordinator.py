@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from aiophoenixcontactcharx import CharxClient, CharxConnectionError, CharxData, CharxModbusError
 
-from .const import CONF_NUM_CHARGING_POINTS, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import CONF_NUM_CHARGING_POINTS, DEFAULT_POLL_TIMEOUT, DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,9 +39,11 @@ class CharxCoordinator(DataUpdateCoordinator[CharxData]):
 
     async def _async_update_data(self) -> CharxData:
         try:
-            async with asyncio.timeout(30):
+            async with asyncio.timeout(DEFAULT_POLL_TIMEOUT):
                 return await self.client.fetch_data(self.num_charging_points)
         except CharxConnectionError as err:
             raise UpdateFailed(f"Cannot reach CHARX controller: {err}") from err
         except CharxModbusError as err:
             raise UpdateFailed(f"Modbus error from CHARX controller: {err}") from err
+        except TimeoutError as err:
+            raise UpdateFailed(f"Timeout polling CHARX controller after {DEFAULT_POLL_TIMEOUT}s") from err
