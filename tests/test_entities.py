@@ -80,6 +80,12 @@ class TestSensors:
         state = hass.states.get("sensor.charging_point_1_error_code")
         assert state.state == "0x00000000"
 
+    async def test_session_energy_state_class_is_total(self, hass, config_entry, mock_client):
+        await _setup(hass, config_entry, mock_client)
+        state = hass.states.get("sensor.charging_point_1_session_energy")
+        assert state is not None
+        assert state.attributes.get("state_class") == "total"
+
 
 # ---------------------------------------------------------------------------
 # Binary sensors
