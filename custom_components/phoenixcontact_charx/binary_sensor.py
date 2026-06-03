@@ -63,11 +63,7 @@ class CharxCpBinarySensor(CharxChargingPointEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool | None:
-        cp_data = next(
-            (cp for cp in self.coordinator.data.charging_points
-             if cp.charging_point == self._charging_point),
-            None,
-        )
+        cp_data = self._cp_data
         if cp_data is None:
             return None
         return self.entity_description.value_fn(cp_data)
