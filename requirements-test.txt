@@ -1,0 +1,3 @@
+aiophoenixcontactcharx==1.0.0
+pytest-homeassistant-custom-component
+pytest-cov
