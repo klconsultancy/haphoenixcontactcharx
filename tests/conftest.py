@@ -115,6 +115,22 @@ def fake_charx_data(num_points: int = 1, **device_overrides) -> CharxData:
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
+def mock_coordinator():
+    """Patch only the coordinator's CharxClient (does not touch config_flow probing)."""
+    with patch(
+        "custom_components.phoenixcontact_charx.coordinator.CharxClient"
+    ) as mock_cls:
+        instance = mock_cls.return_value
+        instance.fetch_data = AsyncMock(return_value=fake_charx_data())
+        instance.disconnect = AsyncMock()
+        instance.set_charging_release = AsyncMock()
+        instance.set_max_current = AsyncMock()
+        instance.set_availability = AsyncMock()
+        instance.set_dynamic_max_current = AsyncMock()
+        yield instance
+
+
+@pytest.fixture
 def mock_client():
     """Patch CharxClient in both config_flow and coordinator."""
     with patch(
