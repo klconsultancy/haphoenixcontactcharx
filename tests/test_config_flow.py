@@ -311,7 +311,7 @@ async def test_dhcp_discovery_shows_confirm_form(hass):
     assert result["step_id"] == "dhcp_confirm"
 
 
-async def test_dhcp_confirm_creates_entry(hass, mock_client):
+async def test_dhcp_confirm_creates_entry(hass, mock_coordinator):
     """Confirming discovery probes the device and creates the config entry."""
     with patch(
         "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
@@ -328,7 +328,32 @@ async def test_dhcp_confirm_creates_entry(hass, mock_client):
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"]["host"] == "192.168.1.50"
     assert result["data"]["port"] == 502
+    assert result["data"]["mac"] == "A8:74:1D:50:D1:A3"
     assert result["data"]["num_charging_points"] == 1
+
+
+async def test_dhcp_confirm_stale_dhcp_aborts_if_probed_mac_already_configured(
+    hass, config_entry, mock_coordinator
+):
+    """If the IP was reassigned since discovery, the probed MAC gates duplicate detection."""
+    dhcp_info = DhcpServiceInfo(
+        ip="192.168.1.50",
+        hostname="ev3000",
+        macaddress="a8741d50d1a3",  # unknown MAC — not in any config entry
+    )
+    with patch(
+        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
+        AsyncMock(return_value={
+            "title": "CHARX SEC-3000",
+            "mac": "AA:BB:CC:DD:EE:FF",  # probed MAC matches existing config_entry
+            "num_charging_points": 1,
+        }),
+    ):
+        result = await _init_dhcp(hass, dhcp_info)
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
 
 
 async def test_dhcp_confirm_cap_exceeded_goes_to_cap_confirm(hass):

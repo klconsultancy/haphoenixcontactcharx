@@ -171,6 +171,12 @@ class CharxConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             probed = await self._probe_or_error(self._host, self._port, errors)
             if probed is not None:
+                # Re-validate against the device-reported MAC in case the DHCP
+                # packet was stale (IP reassigned between discovery and confirm).
+                await self.async_set_unique_id(probed["mac"])
+                self._abort_if_unique_id_configured(
+                    updates={CONF_HOST: self._host, CONF_PORT: self._port}
+                )
                 return await self._finish_new_entry(probed)
         return self.async_show_form(
             step_id="dhcp_confirm",
