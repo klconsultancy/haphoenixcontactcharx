@@ -3,6 +3,9 @@
   "name": "Phoenix Contact CHARX",
   "codeowners": ["@kristoflemmens"],
   "config_flow": true,
+  "dhcp": [
+    {"macaddress": "A8741D*", "hostname": "ev3000*"}
+  ],
   "documentation": "https://github.com/klconsultancy/haphoenixcontactcharx",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/klconsultancy/haphoenixcontactcharx/issues",

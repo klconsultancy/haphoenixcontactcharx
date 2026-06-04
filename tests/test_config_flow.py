@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from homeassistant.data_entry_flow import FlowResultType
 
 from aiophoenixcontactcharx import CharxConnectionError, CharxModbusError
@@ -284,3 +285,93 @@ async def test_reconfigure_connection_error_shows_error(hass, config_entry):
 
     assert result["type"] == FlowResultType.FORM
     assert result["errors"]["base"] == "cannot_connect"
+
+
+# ---------------------------------------------------------------------------
+# DHCP discovery flow
+# ---------------------------------------------------------------------------
+
+_DHCP_INFO = DhcpServiceInfo(
+    ip="192.168.1.50",
+    hostname="ev3000",
+    macaddress="a8741d50d1a3",
+)
+
+
+async def _init_dhcp(hass, dhcp_info=_DHCP_INFO):
+    return await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "dhcp"}, data=dhcp_info
+    )
+
+
+async def test_dhcp_discovery_shows_confirm_form(hass):
+    result = await _init_dhcp(hass)
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "dhcp_confirm"
+
+
+async def test_dhcp_confirm_creates_entry(hass, mock_client):
+    """Confirming discovery probes the device and creates the config entry."""
+    with patch(
+        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
+        AsyncMock(return_value={
+            "title": "CHARX SEC-3000",
+            "mac": "A8:74:1D:50:D1:A3",
+            "num_charging_points": 1,
+        }),
+    ):
+        result = await _init_dhcp(hass)
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    await hass.async_block_till_done()
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"]["host"] == "192.168.1.50"
+    assert result["data"]["port"] == 502
+    assert result["data"]["num_charging_points"] == 1
+
+
+async def test_dhcp_confirm_cap_exceeded_goes_to_cap_confirm(hass):
+    """Confirming discovery with >12 CPs routes to the cap_confirm warning step."""
+    with patch(
+        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
+        AsyncMock(return_value={
+            "title": "CHARX",
+            "mac": "A8:74:1D:50:D1:A3",
+            "num_charging_points": 20,
+        }),
+    ):
+        result = await _init_dhcp(hass)
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "cap_confirm"
+    assert result["description_placeholders"]["detected"] == "20"
+
+
+async def test_dhcp_confirm_connection_error_shows_error(hass):
+    """If probe fails on confirm, the form is re-shown with an error."""
+    with patch(
+        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
+        AsyncMock(side_effect=CharxConnectionError("timeout")),
+    ):
+        result = await _init_dhcp(hass)
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "dhcp_confirm"
+    assert result["errors"]["base"] == "cannot_connect"
+
+
+async def test_dhcp_already_configured_updates_ip_and_aborts(hass, config_entry):
+    """Rediscovery of a known MAC silently updates the host and aborts."""
+    dhcp_info = DhcpServiceInfo(
+        ip="192.168.1.99",
+        hostname="ev3000",
+        macaddress="aabbccddeeff",  # matches config_entry unique_id AA:BB:CC:DD:EE:FF
+    )
+    result = await _init_dhcp(hass, dhcp_info)
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert config_entry.data["host"] == "192.168.1.99"

@@ -13,6 +13,10 @@
         "title": "Charge Point limit reached",
         "description": "The controller reports {detected} Charge Points, but this integration supports at most {cap} (UM EN CHARX SEC §2.3.3). Only the first {cap} Charge Points will be managed. Click Submit to continue."
       },
+      "dhcp_confirm": {
+        "title": "Phoenix Contact CHARX found",
+        "description": "A CHARX charging controller was found at {host} ({hostname}). Click Submit to connect and add it to Home Assistant."
+      },
       "reconfigure": {
         "title": "Reconfigure Phoenix Contact CHARX",
         "description": "Re-probe the controller to update the Charge Point count. Existing entity IDs and history are preserved.",
