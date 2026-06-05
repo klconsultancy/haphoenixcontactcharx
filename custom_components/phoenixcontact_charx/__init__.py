@@ -27,10 +27,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: CharxConfigEntry) -> boo
 
     # Pre-register the hub device so that charging point entities can reference
     # it via via_device even when platforms are set up concurrently.
-    mac = entry.data.get("mac", entry.data[CONF_HOST])
     dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, mac)},
+        identifiers={(DOMAIN, coordinator.device_id)},
         name=coordinator.data.device_info.designation or "CHARX SEC",
         manufacturer="Phoenix Contact",
         model=coordinator.data.device_info.designation or "CHARX SEC",

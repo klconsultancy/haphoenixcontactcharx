@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from aiophoenixcontactcharx import CharxClient, CharxConnectionError, CharxData, CharxModbusError
 
-from .const import CONF_NUM_CHARGING_POINTS, DEFAULT_POLL_TIMEOUT, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import CONF_MAC, CONF_NUM_CHARGING_POINTS, DEFAULT_POLL_TIMEOUT, DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +36,14 @@ class CharxCoordinator(DataUpdateCoordinator[CharxData]):
             update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
             config_entry=config_entry,
         )
+
+    @property
+    def device_id(self) -> str:
+        return self.config_entry.data.get(CONF_MAC, self.config_entry.data[CONF_HOST])
+
+    @property
+    def charging_point_indices(self) -> range:
+        return range(1, self.num_charging_points + 1)
 
     async def _async_update_data(self) -> CharxData:
         try:

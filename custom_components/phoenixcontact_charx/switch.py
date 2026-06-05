@@ -2,22 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
-import logging
 from typing import Any
 
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-
-from aiophoenixcontactcharx import CharxConnectionError, CharxModbusError
 
 from . import CharxConfigEntry
 from .coordinator import CharxCoordinator
 from .entity import CharxChargingPointEntity
-
-_LOGGER = logging.getLogger(__name__)
 
 
 class CharxChargingReleaseSwitch(CharxChargingPointEntity, SwitchEntity):
@@ -38,30 +31,16 @@ class CharxChargingReleaseSwitch(CharxChargingPointEntity, SwitchEntity):
         return cp_data.control.charging_release if cp_data else None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        try:
-            await self.coordinator.client.set_charging_release(
-                self._charging_point, True
-            )
-        except (CharxConnectionError, CharxModbusError) as err:
-            message = (
-                f"Failed to enable charging release on CP{self._charging_point}: {err}"
-            )
-            _LOGGER.error(message)
-            raise HomeAssistantError(message) from err
-        await self.coordinator.async_request_refresh()
+        await self._write_command(
+            self.coordinator.client.set_charging_release(self._charging_point, True),
+            f"Failed to enable charging release on CP{self._charging_point}",
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        try:
-            await self.coordinator.client.set_charging_release(
-                self._charging_point, False
-            )
-        except (CharxConnectionError, CharxModbusError) as err:
-            message = (
-                f"Failed to disable charging release on CP{self._charging_point}: {err}"
-            )
-            _LOGGER.error(message)
-            raise HomeAssistantError(message) from err
-        await self.coordinator.async_request_refresh()
+        await self._write_command(
+            self.coordinator.client.set_charging_release(self._charging_point, False),
+            f"Failed to disable charging release on CP{self._charging_point}",
+        )
 
 
 class CharxAvailabilitySwitch(CharxChargingPointEntity, SwitchEntity):
@@ -82,26 +61,16 @@ class CharxAvailabilitySwitch(CharxChargingPointEntity, SwitchEntity):
         return cp_data.control.available if cp_data else None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        try:
-            await self.coordinator.client.set_availability(
-                self._charging_point, True
-            )
-        except (CharxConnectionError, CharxModbusError) as err:
-            message = f"Failed to set CP{self._charging_point} available: {err}"
-            _LOGGER.error(message)
-            raise HomeAssistantError(message) from err
-        await self.coordinator.async_request_refresh()
+        await self._write_command(
+            self.coordinator.client.set_availability(self._charging_point, True),
+            f"Failed to set CP{self._charging_point} available",
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        try:
-            await self.coordinator.client.set_availability(
-                self._charging_point, False
-            )
-        except (CharxConnectionError, CharxModbusError) as err:
-            message = f"Failed to set CP{self._charging_point} to status F: {err}"
-            _LOGGER.error(message)
-            raise HomeAssistantError(message) from err
-        await self.coordinator.async_request_refresh()
+        await self._write_command(
+            self.coordinator.client.set_availability(self._charging_point, False),
+            f"Failed to set CP{self._charging_point} to status F",
+        )
 
 
 async def async_setup_entry(
@@ -111,7 +80,7 @@ async def async_setup_entry(
 ) -> None:
     coordinator = entry.runtime_data
     entities: list[SwitchEntity] = []
-    for cp in range(1, coordinator.num_charging_points + 1):
+    for cp in coordinator.charging_point_indices:
         entities.append(CharxChargingReleaseSwitch(coordinator, cp))
         entities.append(CharxAvailabilitySwitch(coordinator, cp))
     async_add_entities(entities)

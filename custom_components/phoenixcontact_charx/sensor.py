@@ -26,6 +26,7 @@ from aiophoenixcontactcharx import CharxData, ChargingPointData, DeviceInfo
 
 from . import CharxConfigEntry
 from .entity import CharxChargingPointEntity, CharxEntity
+from .values import error_code_hex, nullable_round, vehicle_status_key
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +55,7 @@ GROUP_SENSORS: tuple[CharxGroupSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         suggested_display_precision=2,
-        value_fn=lambda d: round(d.group_current_l1_a, 2) if d.group_current_l1_a is not None else None,
+        value_fn=lambda d: nullable_round(d.group_current_l1_a, 2),
     ),
     CharxGroupSensorDescription(
         key="group_current_l2",
@@ -63,7 +64,7 @@ GROUP_SENSORS: tuple[CharxGroupSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         suggested_display_precision=2,
-        value_fn=lambda d: round(d.group_current_l2_a, 2) if d.group_current_l2_a is not None else None,
+        value_fn=lambda d: nullable_round(d.group_current_l2_a, 2),
     ),
     CharxGroupSensorDescription(
         key="group_current_l3",
@@ -72,7 +73,7 @@ GROUP_SENSORS: tuple[CharxGroupSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         suggested_display_precision=2,
-        value_fn=lambda d: round(d.group_current_l3_a, 2) if d.group_current_l3_a is not None else None,
+        value_fn=lambda d: nullable_round(d.group_current_l3_a, 2),
     ),
     CharxGroupSensorDescription(
         key="num_charging",
@@ -112,7 +113,7 @@ CP_SENSORS: tuple[CharxCpSensorDescription, ...] = (
         translation_key="vehicle_status",
         device_class=SensorDeviceClass.ENUM,
         options=["a1", "a2", "b1", "b2", "c1", "c2", "e0", "f0", "in"],
-        value_fn=lambda cp: cp.status.vehicle_status.lower() if cp.status.vehicle_status else None,
+        value_fn=vehicle_status_key,
     ),
     CharxCpSensorDescription(
         key="voltage_l1",
@@ -148,7 +149,7 @@ CP_SENSORS: tuple[CharxCpSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         suggested_display_precision=2,
-        value_fn=lambda cp: round(cp.status.current_l1_a, 2) if cp.status.current_l1_a is not None else None,
+        value_fn=lambda cp: nullable_round(cp.status.current_l1_a, 2),
     ),
     CharxCpSensorDescription(
         key="current_l2",
@@ -157,7 +158,7 @@ CP_SENSORS: tuple[CharxCpSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         suggested_display_precision=2,
-        value_fn=lambda cp: round(cp.status.current_l2_a, 2) if cp.status.current_l2_a is not None else None,
+        value_fn=lambda cp: nullable_round(cp.status.current_l2_a, 2),
     ),
     CharxCpSensorDescription(
         key="current_l3",
@@ -166,7 +167,7 @@ CP_SENSORS: tuple[CharxCpSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         suggested_display_precision=2,
-        value_fn=lambda cp: round(cp.status.current_l3_a, 2) if cp.status.current_l3_a is not None else None,
+        value_fn=lambda cp: nullable_round(cp.status.current_l3_a, 2),
     ),
     CharxCpSensorDescription(
         key="active_power",
@@ -240,7 +241,7 @@ CP_SENSORS: tuple[CharxCpSensorDescription, ...] = (
     CharxCpSensorDescription(
         key="error_code",
         translation_key="error_code",
-        value_fn=lambda cp: f"0x{cp.status.error_code:08X}" if cp.status.error_code else "0x00000000",
+        value_fn=error_code_hex,
     ),
 )
 
@@ -304,7 +305,7 @@ async def async_setup_entry(
     for description in GROUP_SENSORS:
         entities.append(CharxGroupSensor(coordinator, description))
 
-    for cp in range(1, coordinator.num_charging_points + 1):
+    for cp in coordinator.charging_point_indices:
         for description in CP_SENSORS:
             entities.append(CharxCpSensor(coordinator, cp, description))
 
