@@ -76,7 +76,7 @@ async def async_setup_entry(
 ) -> None:
     coordinator = entry.runtime_data
     entities: list[BinarySensorEntity] = []
-    for cp in range(1, coordinator.num_charging_points + 1):
+    for cp in coordinator.charging_point_indices:
         for description in CP_BINARY_SENSORS:
             entities.append(CharxCpBinarySensor(coordinator, cp, description))
     async_add_entities(entities)

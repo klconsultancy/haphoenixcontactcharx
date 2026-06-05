@@ -6,10 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from aiophoenixcontactcharx import CharxConnectionError, CharxModbusError
 
-from custom_components.phoenixcontact_charx.const import DEFAULT_POLL_TIMEOUT
+from custom_components.phoenixcontact_charx.const import DEFAULT_POLL_TIMEOUT, DOMAIN
 from custom_components.phoenixcontact_charx.coordinator import CharxCoordinator
 from .conftest import fake_charx_data
 
@@ -68,6 +69,16 @@ async def test_coordinator_timeout_raises_update_failed(hass, config_entry, mock
     coordinator = CharxCoordinator(hass, config_entry)
     with pytest.raises(UpdateFailed, match="Timeout"):
         await coordinator._async_update_data()
+
+
+async def test_charging_point_indices_are_one_based(hass, mock_client):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"host": "192.168.1.1", "port": 502, "mac": "AA:BB:CC:DD:EE:FF", "num_charging_points": 3},
+    )
+    entry.add_to_hass(hass)
+    coordinator = CharxCoordinator(hass, entry)
+    assert list(coordinator.charging_point_indices) == [1, 2, 3]
 
 
 async def test_coordinator_disconnect_called_on_unload(hass, config_entry, mock_client):

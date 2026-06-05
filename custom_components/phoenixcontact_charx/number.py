@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.const import UnitOfElectricCurrent
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-
-from aiophoenixcontactcharx import CharxConnectionError, CharxModbusError
 
 from . import CharxConfigEntry
 from .const import MAX_CURRENT_A, MIN_CURRENT_A
@@ -43,18 +40,14 @@ class CharxMaxCurrentNumber(CharxChargingPointEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         current = int(value)
         try:
-            await self.coordinator.client.set_max_current(self._charging_point, current)
+            await self._write_command(
+                self.coordinator.client.set_max_current(self._charging_point, current),
+                f"Failed to set max current on CP{self._charging_point}",
+            )
         except ValueError as err:
             message = f"Invalid max current value {current}: {err}"
             _LOGGER.error(message)
             raise HomeAssistantError(message) from err
-        except (CharxConnectionError, CharxModbusError) as err:
-            message = (
-                f"Failed to set max current on CP{self._charging_point}: {err}"
-            )
-            _LOGGER.error(message)
-            raise HomeAssistantError(message) from err
-        await self.coordinator.async_request_refresh()
 
 
 class CharxDynamicMaxCurrentNumber(CharxEntity, NumberEntity):
@@ -78,13 +71,10 @@ class CharxDynamicMaxCurrentNumber(CharxEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         current = int(value)
-        try:
-            await self.coordinator.client.set_dynamic_max_current(current)
-        except (CharxConnectionError, CharxModbusError) as err:
-            message = f"Failed to set dynamic max current on CP group: {err}"
-            _LOGGER.error(message)
-            raise HomeAssistantError(message) from err
-        await self.coordinator.async_request_refresh()
+        await self._write_command(
+            self.coordinator.client.set_dynamic_max_current(current),
+            "Failed to set dynamic max current on CP group",
+        )
 
 
 async def async_setup_entry(
@@ -94,6 +84,6 @@ async def async_setup_entry(
 ) -> None:
     coordinator = entry.runtime_data
     entities: list[NumberEntity] = [CharxDynamicMaxCurrentNumber(coordinator)]
-    for cp in range(1, coordinator.num_charging_points + 1):
+    for cp in coordinator.charging_point_indices:
         entities.append(CharxMaxCurrentNumber(coordinator, cp))
     async_add_entities(entities)
