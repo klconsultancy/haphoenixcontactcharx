@@ -1,0 +1,11 @@
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    network_mode: host
+    volumes:
+      - ./ha-config:/config
+      - ./custom_components:/config/custom_components
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped
