@@ -3,7 +3,5 @@ __pycache__/
 *.pyc
 *.egg-info/
 .pytest_cache/
-config/
-.devcontainer.json
-.devcontainer-lock.json
-scripts/
+ha-config/*
+!ha-config/configuration.yaml
