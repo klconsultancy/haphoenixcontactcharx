@@ -53,6 +53,6 @@ A Phoenix Contact-specific 32-bit fault register for a Charge Point, formatted a
 
 ## Charge Point
 
-One physical EV socket, managed by one CHARX SEC-3xxx hardware unit. Identified by a 1-based integer index within the Controller. Carries vehicle status, per-phase electrical measurements, session energy, and controls (charging release, availability, max current).
+One physical EV socket, managed by one Controller. Identified by a 1-based integer index within the Controller. Carries vehicle status, per-phase electrical measurements, session energy, and controls (charging release, availability, max current).
 
-Each CHARX SEC-3xxx hardware unit corresponds to exactly one Charge Point. The terms "controller" (library) and "Charge Point" (integration, WBM) are 1:1 at the hardware level.
+A Controller hosts up to 12 Charge Points: its own, plus up to 11 SEC-1000 backplane extension modules attached to it. This is a standalone-deployment fact and is distinct from a Client/Server Group (see Controller above), which multiplexes multiple Controllers — each with its own Charge Points — over one Modbus/TCP connection.
