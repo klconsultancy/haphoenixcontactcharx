@@ -26,8 +26,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: CharxConfigEntry) -> boo
     entry.runtime_data = coordinator
 
     # Pre-register the hub device so that charging point entities can reference
-    # it via via_device even when platforms are set up concurrently.
-    dr.async_get(hass).async_get_or_create(
+    # it via via_device_id even when platforms are set up concurrently.
+    hub_device = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, coordinator.device_id)},
         name=coordinator.data.device_info.designation or "CHARX SEC",
@@ -36,6 +36,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: CharxConfigEntry) -> boo
         sw_version=coordinator.data.device_info.software_version,
         configuration_url=f"http://{entry.data[CONF_HOST]}",
     )
+    coordinator.hub_device_id = hub_device.id
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

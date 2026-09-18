@@ -22,6 +22,7 @@ class CharxCoordinator(DataUpdateCoordinator[CharxData]):
     """Coordinator that polls a CHARX controller on a fixed interval."""
 
     config_entry: ConfigEntry
+    hub_device_id: str
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         self.client = CharxClient(
