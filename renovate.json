@@ -1,9 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
   "description": "Updates come on the 1st and the 15th, grouped, and are merged once main's required checks pass, unless they raise a major version. release-please collects the fix(deps) ones in the release pull request, which is merged by hand.",
   "timezone": "Europe/Brussels",
-  "schedule": ["* 0-8 1,15 * *"],
+  "schedule": [
+    "* 0-8 1,15 * *"
+  ],
   "platformCommit": "enabled",
   "semanticCommits": "enabled",
   "automerge": true,
@@ -12,43 +17,80 @@
   "rebaseWhen": "behind-base-branch",
   "vulnerabilityAlerts": {
     "description": "Security fixes come at once, outside the schedule.",
-    "schedule": ["at any time"]
+    "schedule": [
+      "at any time"
+    ]
   },
   "packageRules": [
     {
       "description": "The library, in the manifest Home Assistant installs from and in the tests together. A new version reaches users, so it is a fix release-please releases. A major version is a migration done by hand (see #35).",
-      "matchPackageNames": ["aiophoenixcontactcharx"],
+      "matchPackageNames": [
+        "aiophoenixcontactcharx"
+      ],
       "rangeStrategy": "bump",
       "semanticCommitType": "fix",
       "groupName": "aiophoenixcontactcharx"
     },
     {
-      "description": "The test dependencies, which no release contains. pytest-homeassistant-custom-component pins the Home Assistant version the tests run against.",
-      "matchFileNames": ["requirements-test.txt"],
-      "matchPackageNames": ["!aiophoenixcontactcharx"],
+      "description": "The test dependencies, which no release contains.",
+      "matchFileNames": [
+        "requirements-test.txt"
+      ],
+      "matchPackageNames": [
+        "!aiophoenixcontactcharx"
+      ],
       "semanticCommitType": "build",
       "groupName": "test dependencies"
     },
     {
+      "description": "pytest-homeassistant-custom-component pins the Home Assistant version the tests run against, betas included, which Renovate can't tell from a stable release. Its PR waits for review: check that it pins a stable release, and move the packages Home Assistant pins (below) to that release's versions in the same PR.",
+      "matchPackageNames": [
+        "pytest-homeassistant-custom-component"
+      ],
+      "semanticCommitType": "build",
+      "groupName": "home assistant",
+      "automerge": false
+    },
+    {
+      "description": "Packages Home Assistant pins exactly: the tests use the versions of the Home Assistant release that pytest-homeassistant-custom-component pins, moved by hand with it, not the newest on PyPI. None is a test dependency yet; the modbus stack becomes one with 2.0.0 (#35).",
+      "matchFileNames": [
+        "requirements-test.txt"
+      ],
+      "matchPackageNames": [
+        "modbus-connection",
+        "pymodbus",
+        "tmodbus"
+      ],
+      "enabled": false
+    },
+    {
       "description": "The Home Assistant container for manual testing, which no release contains.",
-      "matchFileNames": ["docker-compose.yml"],
+      "matchFileNames": [
+        "docker-compose.yml"
+      ],
       "semanticCommitType": "build",
       "groupName": "dev environment"
     },
     {
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "semanticCommitType": "ci",
       "groupName": "actions"
     },
     {
       "description": "Home Assistant's validation actions have no releases worth following; their branch head's digest is enough.",
-      "matchPackageNames": ["home-assistant/actions"],
+      "matchPackageNames": [
+        "home-assistant/actions"
+      ],
       "semanticCommitType": "ci",
       "groupName": "actions"
     },
     {
       "description": "A major version waits for review.",
-      "matchUpdateTypes": ["major"],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "automerge": false
     }
   ]
