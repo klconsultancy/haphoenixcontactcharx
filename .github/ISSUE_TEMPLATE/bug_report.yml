@@ -1,0 +1,48 @@
+name: Bug report
+description: An entity shows a wrong value, a control doesn't work, or setup fails.
+labels: [bug, needs-triage]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Name the entities involved.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Debug logs around the failure. Enable them with:
+        ```yaml
+        logger:
+          logs:
+            custom_components.phoenixcontact_charx: debug
+            aiophoenixcontactcharx: debug
+        ```
+      render: text
+  - type: input
+    id: integration-version
+    attributes:
+      label: Integration version
+    validations:
+      required: true
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+    validations:
+      required: true
+  - type: input
+    id: controller
+    attributes:
+      label: CHARX controller model and firmware version
+      placeholder: CHARX SEC-3100, firmware 1.7.3
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Anything else
+      description: Number of charging points, other Modbus clients talking to the controller, network setup.
