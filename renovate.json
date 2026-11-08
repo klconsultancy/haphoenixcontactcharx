@@ -23,7 +23,7 @@
   },
   "packageRules": [
     {
-      "description": "The library, in the manifest Home Assistant installs from and in the tests together. A new version reaches users, so it is a fix release-please releases. A major version is a migration done by hand (see #35).",
+      "description": "The library, pinned exactly in the manifest Home Assistant installs from and in the tests, and moved in both together. A new version reaches users, so it is a fix release-please releases. A major version is a migration done by hand (see #35): a range would let Home Assistant install a major the integration isn't written for.",
       "matchPackageNames": [
         "aiophoenixcontactcharx"
       ],
