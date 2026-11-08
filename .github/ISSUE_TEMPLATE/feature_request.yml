@@ -1,0 +1,16 @@
+name: Feature request
+description: An entity, control or option the integration doesn't offer yet.
+labels: [enhancement, needs-triage]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you need
+      description: What you want to see or control in Home Assistant, and what you would use it for.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How it could look
+      description: The entity type, its unit, and which CHARX value or register it comes from, if you know.

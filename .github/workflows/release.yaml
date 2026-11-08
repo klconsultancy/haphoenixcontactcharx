@@ -1,19 +1,46 @@
 name: Release
 
+# release-please keeps a release pull request open with the next version and its
+# changelog, from the Conventional Commits titles on main, and raises the version in
+# manifest.json with it. Merging it tags the release and creates the GitHub release,
+# which is what HACS offers to users.
+#
+# A release candidate is a tag such as v1.2.3-rc.1 on main, pushed by an admin (the
+# "release tags" ruleset): it becomes a GitHub pre-release, which HACS offers to users
+# who enabled beta versions, so it can be tested before the release pull request is
+# merged.
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches: [main]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"]
+
+permissions: {}
 
 jobs:
-  release:
-    name: Create release
+  release-please:
+    name: Release PR
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      # A GitHub App token instead of GITHUB_TOKEN, so CI runs on the release PR. The
+      # app may also create the version tags the "release tags" ruleset protects.
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        id: app-token
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+  release-candidate:
+    name: Release candidate
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # the pre-release
     steps:
-      - uses: actions/checkout@v7
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v3
-        with:
-          generate_release_notes: true
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --generate-notes --title "$TAG"
