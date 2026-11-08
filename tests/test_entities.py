@@ -49,6 +49,14 @@ class TestSensors:
         assert state is not None
         assert float(state.state) == pytest.approx(12345.0, rel=1e-3)
 
+    async def test_total_energy_zero_reading_is_unknown(self, hass, config_entry, mock_client):
+        # issue #38: a 0 Wh reading after reconnect must not be published as 0.0
+        data = fake_charx_data()
+        data.charging_points[0].status.energy_active_wh = 0
+        await _setup(hass, config_entry, mock_client, data)
+        state = hass.states.get("sensor.charging_point_1_total_energy")
+        assert state.state == STATE_UNKNOWN
+
     async def test_voltage_l1(self, hass, config_entry, mock_client):
         # fixture: voltage_l1_mv = 230_000 → 230.0 V
         await _setup(hass, config_entry, mock_client)
