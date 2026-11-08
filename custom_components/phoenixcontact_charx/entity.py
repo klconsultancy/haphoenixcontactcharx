@@ -67,7 +67,7 @@ class CharxChargingPointEntity(CharxEntity):
             name=f"Charging Point {charging_point}",
             manufacturer="Phoenix Contact",
             model="CHARX SEC",
-            via_device=(DOMAIN, mac),
+            via_device_id=coordinator.hub_device_id,
         )
 
     @property
