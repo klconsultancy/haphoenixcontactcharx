@@ -26,7 +26,7 @@ from aiophoenixcontactcharx import CharxData, ChargingPointData, DeviceInfo
 
 from . import CharxConfigEntry
 from .entity import CharxChargingPointEntity, CharxEntity
-from .values import error_code_hex, nullable_round, vehicle_status_key
+from .values import error_code_hex, meter_reading_kwh, nullable_round, vehicle_status_key
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +203,7 @@ CP_SENSORS: tuple[CharxCpSensorDescription, ...] = (
         state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         suggested_display_precision=3,
-        value_fn=lambda cp: round(cp.status.energy_active_kwh, 3),
+        value_fn=meter_reading_kwh,
     ),
     CharxCpSensorDescription(
         key="session_energy",

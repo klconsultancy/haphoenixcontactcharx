@@ -6,6 +6,7 @@ import pytest
 
 from custom_components.phoenixcontact_charx.values import (
     error_code_hex,
+    meter_reading_kwh,
     nullable_round,
     vehicle_status_key,
 )
@@ -74,3 +75,22 @@ def test_error_code_hex_large():
 def test_error_code_hex_uppercase():
     cp = fake_cp_data(error_code=0xABCDEF12)
     assert error_code_hex(cp) == "0xABCDEF12"
+
+
+# ---------------------------------------------------------------------------
+# meter_reading_kwh (issue #38)
+# ---------------------------------------------------------------------------
+
+def test_meter_reading_kwh_converts_and_rounds():
+    assert meter_reading_kwh(fake_cp_data(energy_active_wh=10_450_504)) == 10450.504
+
+
+def test_meter_reading_kwh_zero_is_none():
+    """A lifetime meter reading of 0 means 'not yet read', never a real value."""
+    assert meter_reading_kwh(fake_cp_data(energy_active_wh=0)) is None
+
+
+def test_meter_reading_kwh_reconnect_sequence_never_yields_zero():
+    readings = [10_450_504, 0, 10_450_504]
+    values = [meter_reading_kwh(fake_cp_data(energy_active_wh=wh)) for wh in readings]
+    assert values == [10450.504, None, 10450.504]
