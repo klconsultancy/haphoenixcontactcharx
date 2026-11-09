@@ -150,3 +150,101 @@ async def test_an_address_another_integration_holds_fails_setup(
     assert config_entry.state is ConfigEntryState.SETUP_ERROR
     assert config_entry.reason is not None
     assert "Another integration already uses this controller" in config_entry.reason
+
+
+async def test_no_charging_points_at_first_retries_setup(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    # Register 114 reads 0 while the controller starts; the entry expects two points.
+    charx_unit.holding[114] = 0
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    assert config_entry.state is ConfigEntryState.SETUP_RETRY
+
+    charx_unit.holding[114] = 2
+    await hass.config_entries.async_reload(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert config_entry.state is ConfigEntryState.LOADED
+    assert ("sensor", f"{SYNTHETIC_MAC}_cp2_vehicle_status") in registered(hass, config_entry)
+
+
+def hub(hass: HomeAssistant, entry: MockConfigEntry) -> dr.DeviceEntry:
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, SYNTHETIC_MAC), entry.entry_id
+    )
+    assert device is not None
+    return device
+
+
+@pytest.mark.usefixtures("charx_unit", "unit")
+async def test_the_model_is_the_family_not_the_designation(
+    hass: HomeAssistant, config_entry: MockConfigEntry
+) -> None:
+    await set_up(hass, config_entry)
+
+    assert hub(hass, config_entry).model == "CHARX SEC"
+    assert hub(hass, config_entry).name == "CHARX SEC-3100"
+
+
+async def test_the_firmware_version_follows_once_the_identity_reads(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    from modbus_connection.exceptions import IllegalDataValueError  # noqa: PLC0415
+
+    charx_unit.fail_read(100, IllegalDataValueError(3))
+    await set_up(hass, config_entry)
+    assert hub(hass, config_entry).sw_version is None
+
+    charx_unit.fail_read(100, None)
+    await config_entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hub(hass, config_entry).sw_version == "1.7.3"
+
+
+async def test_a_missed_identity_keeps_the_known_firmware_version(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    from modbus_connection.exceptions import IllegalDataValueError  # noqa: PLC0415
+
+    await set_up(hass, config_entry)
+    charx_unit.fail_read(100, IllegalDataValueError(3))
+
+    await config_entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hub(hass, config_entry).sw_version == "1.7.3"
+
+
+async def test_an_unread_identity_keeps_a_known_hubs_name(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    from modbus_connection.exceptions import IllegalDataValueError  # noqa: PLC0415
+
+    registry = dr.async_get(hass)
+    registry.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={(DOMAIN, SYNTHETIC_MAC)},
+        name="CHARX SEC-3100",
+    )
+    charx_unit.fail_read(100, IllegalDataValueError(3))
+
+    await set_up(hass, config_entry)
+
+    assert hub(hass, config_entry).name == "CHARX SEC-3100"
+
+
+async def test_an_unread_identity_names_a_new_hub_generically_until_it_reads(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    from modbus_connection.exceptions import IllegalDataValueError  # noqa: PLC0415
+
+    charx_unit.fail_read(100, IllegalDataValueError(3))
+    await set_up(hass, config_entry)
+    assert hub(hass, config_entry).name == "CHARX SEC"
+
+    charx_unit.fail_read(100, None)
+    await config_entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hub(hass, config_entry).name == "CHARX SEC-3100"

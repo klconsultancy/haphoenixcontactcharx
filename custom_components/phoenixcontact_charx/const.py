@@ -22,3 +22,5 @@ MIN_CURRENT_A: Final = 6
 MAX_CURRENT_A: Final = 80
 
 MANUFACTURER: Final = "Phoenix Contact"
+# Register 100 holds the name set for the controller (ev3000), not its model.
+MODEL: Final = "CHARX SEC"

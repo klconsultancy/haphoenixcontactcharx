@@ -165,6 +165,9 @@
     },
     "charging_point_missing": {
       "message": "The controller doesn't report Charging Point {number}."
+    },
+    "no_charging_points": {
+      "message": "The controller reports no Charging Points yet; setup is retried."
     }
   }
 }

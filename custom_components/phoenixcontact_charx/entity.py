@@ -5,13 +5,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from aiophoenixcontactcharx import CharxError, charging_point_name
-from homeassistant.const import CONF_HOST
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from modbus_connection.exceptions import ModbusError
 
-from .const import DOMAIN, MANUFACTURER
+from .const import DOMAIN, MANUFACTURER, MODEL
 from .coordinator import CharxCoordinator
 
 if TYPE_CHECKING:
@@ -35,16 +34,8 @@ class CharxEntity(CoordinatorEntity[CharxCoordinator]):
         super().__init__(coordinator)
         mac = coordinator.device_id
         self._attr_unique_id = f"{mac}_{unique_suffix}"
-        info = coordinator.controller.device_info
-        name = info.designation or "CHARX SEC"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, mac)},
-            name=name,
-            manufacturer=MANUFACTURER,
-            model=name,
-            sw_version=info.software_version,
-            configuration_url=f"http://{coordinator.config_entry.data[CONF_HOST]}",
-        )
+        # The setup registers the hub and keeps its details current.
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, mac)})
 
     @property
     def _group(self) -> Group:
@@ -93,7 +84,7 @@ class CharxChargingPointEntity(CharxEntity):
             identifiers={(DOMAIN, f"{coordinator.device_id}_cp{charging_point}")},
             name=f"Charging Point {charging_point}",
             manufacturer=MANUFACTURER,
-            model="CHARX SEC",
+            model=MODEL,
             via_device_id=coordinator.hub_device_id,
         )
 
