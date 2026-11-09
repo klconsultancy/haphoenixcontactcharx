@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0-rc.1](https://github.com/klconsultancy/haphoenixcontactcharx/compare/v1.0.2...v2.0.0-rc.1) (2026-11-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* requires Home Assistant 2026.10 or later.
+
+### Features
+
+* run on aiophoenixcontactcharx 2.0 and Home Assistant's modbus connection ([#48](https://github.com/klconsultancy/haphoenixcontactcharx/issues/48)) ([eba42ea](https://github.com/klconsultancy/haphoenixcontactcharx/commit/eba42eacd4d0fffcbc59c04d6980a3b18d4831a7))
+
 ## [1.0.2](https://github.com/klconsultancy/haphoenixcontactcharx/compare/v1.0.1...v1.0.2) (2026-11-08)
 
 
