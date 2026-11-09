@@ -88,7 +88,8 @@ Before adding the integration, configure these in the CHARX **Web-Based Manageme
 | Group Current L1/L2/L3 | Sensor | Aggregated phase currents [A] |
 | Active Charging Sessions | Sensor | Count of points in C2 |
 | Connected Vehicles | Sensor | Count of points in B/C/D |
-| Dynamic Max Current | Sensor + Number | Load management target [A] |
+| Dynamic Max Current | Sensor + Number | Load management target [A]; unknown while no limit is set |
+| Clear Group Dynamic Max Current | Button | Removes the dynamic limit |
 
 ---
 
@@ -101,7 +102,7 @@ Before adding the integration, configure these in the CHARX **Web-Based Manageme
 
 **Charging release and availability switches are unavailable**
 - They need the charging point's release mode set to **Modbus** in WBM. In any other mode (OCPP, Permanent, Whitelist) the controller ignores them, so the integration shows them as unavailable rather than as switches that do nothing; the log says which release mode the charging point is in.
-- With an OCPP backend that authorizes the sessions, limit the charging current with **Dynamic Max Current** instead: it works in every release mode.
+- With an OCPP backend that authorizes the sessions, limit the charging current with **Dynamic Max Current** instead: it works in every release mode. Press **Clear Group Dynamic Max Current** to remove the limit again.
 
 **Sensors show "unavailable"**
 - The controller may be temporarily unreachable. Check the ERR LED and WBM dashboard.

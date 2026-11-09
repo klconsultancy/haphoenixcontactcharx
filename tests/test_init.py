@@ -24,6 +24,12 @@ if TYPE_CHECKING:
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 UNIQUE_IDS_1_0 = json.loads((FIXTURES / "unique_ids_1.0.json").read_text(encoding="utf-8"))
+# Entities 2.0 adds; they don't exist in 1.0.x, so no history depends on their IDs.
+NEW_IN_2_0 = {("button", "clear_dynamic_max_current")}
+
+
+def new_in_2_0(mac: str) -> set[tuple[str, str]]:
+    return {(platform, f"{mac}_{key}") for platform, key in NEW_IN_2_0}
 
 
 def unique_ids_1_0(mac: str, charging_points: int) -> set[tuple[str, str]]:
@@ -61,7 +67,9 @@ async def test_the_unique_ids_are_those_of_1_0(
     # Two Charging Points: 7 + 1 hub entities, 16 + 3 + 2 + 1 per point.
     await set_up(hass, config_entry)
 
-    assert registered(hass, config_entry) == unique_ids_1_0(SYNTHETIC_MAC, 2)
+    assert registered(hass, config_entry) == unique_ids_1_0(SYNTHETIC_MAC, 2) | new_in_2_0(
+        SYNTHETIC_MAC
+    )
 
 
 @pytest.mark.usefixtures("real_unit", "unit")
@@ -70,7 +78,7 @@ async def test_the_unique_ids_of_the_real_controller_are_those_of_1_0(
 ) -> None:
     await set_up(hass, real_entry)
 
-    assert registered(hass, real_entry) == unique_ids_1_0(REAL_MAC, 1)
+    assert registered(hass, real_entry) == unique_ids_1_0(REAL_MAC, 1) | new_in_2_0(REAL_MAC)
 
 
 @pytest.mark.usefixtures("charx_unit", "unit")

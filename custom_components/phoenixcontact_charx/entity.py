@@ -62,8 +62,9 @@ class CharxEntity(CoordinatorEntity[CharxCoordinator]):
                 translation_placeholders={"what": what, "error": str(err)},
             ) from err
         # The library read the part back until the write landed, so its values are
-        # current: show them now rather than after the (debounced) refresh.
-        self.async_write_ha_state()
+        # current: show them now, on every entity (a button's write changes a number),
+        # rather than after the (debounced) refresh.
+        self.coordinator.async_update_listeners()
         await self.coordinator.async_request_refresh()
 
 

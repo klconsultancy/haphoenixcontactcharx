@@ -363,6 +363,46 @@ async def test_a_failed_number_write_raises(
         )
 
 
+@pytest.mark.usefixtures("unit")
+async def test_the_dynamic_max_current_is_cleared_again(
+    hass: HomeAssistant, real_entry: MockConfigEntry, real_unit: MockModbusUnit
+) -> None:
+    await set_up(hass, real_entry)
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": entity_id(hass, "number", "dynamic_max_current_number", REAL_MAC), "value": 16},
+        blocking=True,
+    )
+    events = writes(real_unit)
+
+    await hass.services.async_call(
+        "button",
+        "press",
+        {"entity_id": entity_id(hass, "button", "clear_dynamic_max_current", REAL_MAC)},
+        blocking=True,
+    )
+
+    assert [(e.address, e.values, e.function_code) for e in events] == [(167, [65535], 0x10)]
+    assert state(hass, "number", "dynamic_max_current_number", REAL_MAC).state == STATE_UNKNOWN
+    assert state(hass, "sensor", "dynamic_max_current", REAL_MAC).state == STATE_UNKNOWN
+
+
+async def test_a_failed_clear_raises(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    await set_up(hass, config_entry)
+    charx_unit.fail_write(167, ModbusConnectionError("gone"))
+
+    with pytest.raises(HomeAssistantError, match="gone"):
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": entity_id(hass, "button", "clear_dynamic_max_current")},
+            blocking=True,
+        )
+
+
 # -- a Charging Point the controller no longer reports -----------------------------
 
 

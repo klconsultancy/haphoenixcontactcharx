@@ -141,6 +141,11 @@
         "name": "Available"
       }
     },
+    "button": {
+      "clear_dynamic_max_current": {
+        "name": "Clear Group Dynamic Max Current"
+      }
+    },
     "number": {
       "max_current": {
         "name": "Max Current"
