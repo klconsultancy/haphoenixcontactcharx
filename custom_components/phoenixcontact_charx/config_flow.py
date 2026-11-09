@@ -6,19 +6,27 @@ import logging
 from typing import Any
 
 import voluptuous as vol
+from aiophoenixcontactcharx import CharxController
+from homeassistant.components.modbus import async_get_temporary_unit
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PORT
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
-
-from aiophoenixcontactcharx import CharxClient, CharxConnectionError, CharxError
+from modbus_connection import ModbusTcpParams
+from modbus_connection.exceptions import (
+    ModbusConnectionError,
+    ModbusError,
+    ModbusTimeoutError,
+)
 
 from .const import (
     CONF_MAC,
     CONF_NUM_CHARGING_POINTS,
-    DEFAULT_NUM_CHARGING_POINTS,
     DEFAULT_PORT,
     DOMAIN,
     MAX_CHARGING_POINTS,
+    UNIT_ID,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,14 +39,29 @@ _STEP_USER_SCHEMA = vol.Schema(
 )
 
 
-async def _validate_and_probe(host: str, port: int) -> dict[str, Any]:
-    """Connect to the device, read basic info, and return data for the config entry."""
-    async with CharxClient(host, port) as client:
-        info = await client.get_device_info()
+class CannotIdentifyError(Exception):
+    """The controller answered, but not with its identity."""
+
+
+async def _validate_and_probe(hass: HomeAssistant, host: str, port: int) -> dict[str, Any]:
+    """Read the controller's identity; return the data for the config entry.
+
+    Raises ``ModbusError`` (or ``TimeoutError``) when it doesn't answer,
+    ``HomeAssistantError`` when another integration holds the address with other link
+    settings, and ``CannotIdentifyError`` when its identity doesn't read.
+    """
+    params = ModbusTcpParams(host=host, port=port)
+    async with async_get_temporary_unit(hass, params, UNIT_ID) as unit:
+        controller = CharxController(unit)
+        report = await controller.async_update()
+    info = controller.device_info
+    if "device_info" in report.failed or info.mac_eth0 is None:
+        raise CannotIdentifyError
     return {
-        "title": info.designation.strip() or f"CHARX @ {host}",
-        "mac": info.mac_eth0,
-        "num_charging_points": max(1, info.num_controllers),
+        "title": (info.designation or "").strip() or f"CHARX @ {host}",
+        # 1.x's form, which every existing entry's unique ID and devices use.
+        "mac": info.mac_eth0.upper(),
+        "num_charging_points": max(1, info.charging_controllers or 0),
     }
 
 
@@ -64,11 +87,14 @@ class CharxConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> dict[str, Any] | None:
         """Probe the device; populate errors on failure and return None."""
         try:
-            return await _validate_and_probe(host, port)
-        except CharxConnectionError:
+            return await _validate_and_probe(self.hass, host, port)
+        except (ModbusConnectionError, ModbusTimeoutError, TimeoutError):
             errors["base"] = "cannot_connect"
-        except CharxError:
+        except (ModbusError, CannotIdentifyError):
             errors["base"] = "modbus_error"
+        except HomeAssistantError:
+            # Another integration holds the address with other link settings.
+            errors["base"] = "connection_in_use"
         except Exception:
             _LOGGER.exception("Unexpected error probing %s:%d", host, port)
             errors["base"] = "unknown"

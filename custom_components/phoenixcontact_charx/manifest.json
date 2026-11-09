@@ -5,6 +5,9 @@
     "@kristoflemmens"
   ],
   "config_flow": true,
+  "dependencies": [
+    "modbus"
+  ],
   "dhcp": [
     {
       "macaddress": "A8741D*",
@@ -14,8 +17,13 @@
   "documentation": "https://github.com/klconsultancy/haphoenixcontactcharx",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/klconsultancy/haphoenixcontactcharx/issues",
+  "loggers": [
+    "aiophoenixcontactcharx",
+    "modbus_connection",
+    "tmodbus"
+  ],
   "requirements": [
-    "aiophoenixcontactcharx==1.0.0"
+    "aiophoenixcontactcharx==2.0.0rc1"
   ],
   "version": "1.0.2"
 }
