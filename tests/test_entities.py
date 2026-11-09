@@ -1,377 +1,419 @@
-"""Tests for sensor, binary_sensor, switch, and number entities."""
+"""The sensors, binary sensors, switches and numbers."""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+import logging
+from typing import TYPE_CHECKING
 
 import pytest
-from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
-from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
-from homeassistant.components.number import DOMAIN as NUMBER_DOMAIN
-from homeassistant.const import STATE_ON, STATE_OFF, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
+from modbus_connection.exceptions import IllegalDataValueError, ModbusConnectionError
 
-from aiophoenixcontactcharx import CharxConnectionError, CharxData
+from custom_components.phoenixcontact_charx.const import DOMAIN
 
-from .conftest import fake_charx_data, fake_device_info
+from .conftest import REAL_MAC, SYNTHETIC_MAC
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant, State
+    from modbus_connection.mock import MockModbusUnit, WriteEvent
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
-async def _setup(hass, config_entry, mock_client, charx_data=None):
-    if charx_data:
-        mock_client.fetch_data = AsyncMock(return_value=charx_data)
-    assert await hass.config_entries.async_setup(config_entry.entry_id)
+async def set_up(hass: HomeAssistant, entry: MockConfigEntry) -> None:
+    assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
 
-# ---------------------------------------------------------------------------
-# Sensors
-# ---------------------------------------------------------------------------
-
-class TestSensors:
-    async def test_vehicle_status_idle(self, hass, config_entry, mock_client):
-        await _setup(hass, config_entry, mock_client)
-        state = hass.states.get("sensor.charging_point_1_vehicle_status")
-        assert state is not None
-        assert state.state == "a1"
-
-    async def test_vehicle_status_charging(self, hass, config_entry, mock_client):
-        data = fake_charx_data()
-        data.charging_points[0].status.vehicle_status = "C2"
-        await _setup(hass, config_entry, mock_client, data)
-        state = hass.states.get("sensor.charging_point_1_vehicle_status")
-        assert state.state == "c2"
-
-    async def test_total_energy_kwh(self, hass, config_entry, mock_client):
-        # fixture: energy_active_wh = 12_345_000 → 12345.0 kWh
-        await _setup(hass, config_entry, mock_client)
-        state = hass.states.get("sensor.charging_point_1_total_energy")
-        assert state is not None
-        assert float(state.state) == pytest.approx(12345.0, rel=1e-3)
-
-    async def test_total_energy_zero_reading_is_unknown(self, hass, config_entry, mock_client):
-        # issue #38: a 0 Wh reading after reconnect must not be published as 0.0
-        data = fake_charx_data()
-        data.charging_points[0].status.energy_active_wh = 0
-        await _setup(hass, config_entry, mock_client, data)
-        state = hass.states.get("sensor.charging_point_1_total_energy")
-        assert state.state == STATE_UNKNOWN
-
-    async def test_voltage_l1(self, hass, config_entry, mock_client):
-        # fixture: voltage_l1_mv = 230_000 → 230.0 V
-        await _setup(hass, config_entry, mock_client)
-        state = hass.states.get("sensor.charging_point_1_voltage_l1")
-        assert float(state.state) == pytest.approx(230.0, rel=1e-3)
-
-    async def test_phase_current_unknown_is_unknown(self, hass, config_entry, mock_client):
-        data = fake_charx_data()
-        data.charging_points[0].status.current_l1_ma = None
-        await _setup(hass, config_entry, mock_client, data)
-        state = hass.states.get("sensor.charging_point_1_current_l1")
-        assert state.state == STATE_UNKNOWN
-
-    async def test_group_active_power(self, hass, config_entry, mock_client):
-        data = fake_charx_data(group_active_power_mw=11_000_000)
-        await _setup(hass, config_entry, mock_client, data)
-        state = hass.states.get("sensor.charx_sec_3000_group_active_power")
-        assert float(state.state) == pytest.approx(11000.0, rel=1e-3)
-
-    async def test_error_code_formatted_as_hex(self, hass, config_entry, mock_client):
-        data = fake_charx_data()
-        data.charging_points[0].status.error_code = 0x00000040
-        await _setup(hass, config_entry, mock_client, data)
-        state = hass.states.get("sensor.charging_point_1_error_code")
-        assert state.state == "0x00000040"
-
-    async def test_error_code_zero_formatted(self, hass, config_entry, mock_client):
-        await _setup(hass, config_entry, mock_client)
-        state = hass.states.get("sensor.charging_point_1_error_code")
-        assert state.state == "0x00000000"
-
-    async def test_session_energy_state_class_is_total(self, hass, config_entry, mock_client):
-        await _setup(hass, config_entry, mock_client)
-        state = hass.states.get("sensor.charging_point_1_session_energy")
-        assert state is not None
-        assert state.attributes.get("state_class") == "total"
+def entity_id(hass: HomeAssistant, platform: str, suffix: str, mac: str = SYNTHETIC_MAC) -> str:
+    """The entity ID of the entity with unique ID ``{mac}_{suffix}``."""
+    found = er.async_get(hass).async_get_entity_id(platform, DOMAIN, f"{mac}_{suffix}")
+    assert found is not None, suffix
+    return found
 
 
-# ---------------------------------------------------------------------------
-# Binary sensors
-# ---------------------------------------------------------------------------
-
-class TestBinarySensors:
-    async def test_connected_false_when_a1(self, hass, config_entry, mock_client):
-        await _setup(hass, config_entry, mock_client)
-        state = hass.states.get("binary_sensor.charging_point_1_connected")
-        assert state.state == STATE_OFF
-
-    async def test_connected_true_when_c2(self, hass, config_entry, mock_client):
-        data = fake_charx_data()
-        data.charging_points[0].status.vehicle_status = "C2"
-        await _setup(hass, config_entry, mock_client, data)
-        state = hass.states.get("binary_sensor.charging_point_1_connected")
-        assert state.state == STATE_ON
-
-    async def test_charging_true_when_c2(self, hass, config_entry, mock_client):
-        data = fake_charx_data()
-        data.charging_points[0].status.vehicle_status = "C2"
-        await _setup(hass, config_entry, mock_client, data)
-        state = hass.states.get("binary_sensor.charging_point_1_charging")
-        assert state.state == STATE_ON
-
-    async def test_charging_false_when_b1(self, hass, config_entry, mock_client):
-        data = fake_charx_data()
-        data.charging_points[0].status.vehicle_status = "B1"
-        await _setup(hass, config_entry, mock_client, data)
-        state = hass.states.get("binary_sensor.charging_point_1_charging")
-        assert state.state == STATE_OFF
-
-    async def test_error_true_when_e0(self, hass, config_entry, mock_client):
-        data = fake_charx_data()
-        data.charging_points[0].status.vehicle_status = "E0"
-        await _setup(hass, config_entry, mock_client, data)
-        state = hass.states.get("binary_sensor.charging_point_1_error")
-        assert state.state == STATE_ON
-
-    async def test_error_false_when_c2(self, hass, config_entry, mock_client):
-        data = fake_charx_data()
-        data.charging_points[0].status.vehicle_status = "C2"
-        await _setup(hass, config_entry, mock_client, data)
-        state = hass.states.get("binary_sensor.charging_point_1_error")
-        assert state.state == STATE_OFF
+def state(hass: HomeAssistant, platform: str, suffix: str, mac: str = SYNTHETIC_MAC) -> State:
+    found = hass.states.get(entity_id(hass, platform, suffix, mac))
+    assert found is not None
+    return found
 
 
-# ---------------------------------------------------------------------------
-# Switches
-# ---------------------------------------------------------------------------
+def writes(unit: MockModbusUnit) -> list[WriteEvent]:
+    events: list[WriteEvent] = []
+    unit.on_write(events.append)
+    return events
 
-class TestSwitches:
-    async def test_charging_release_state_off(self, hass, config_entry, mock_client):
-        await _setup(hass, config_entry, mock_client)
-        state = hass.states.get("switch.charging_point_1_charging_release")
-        assert state.state == STATE_OFF
 
-    async def test_charging_release_state_on(self, hass, config_entry, mock_client):
-        data = fake_charx_data()
-        data.charging_points[0].control.charging_release = True
-        await _setup(hass, config_entry, mock_client, data)
-        state = hass.states.get("switch.charging_point_1_charging_release")
-        assert state.state == STATE_ON
+async def refresh(hass: HomeAssistant, entry: MockConfigEntry) -> None:
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
 
-    async def test_turn_on_charging_release_calls_client(self, hass, config_entry, mock_client):
-        await _setup(hass, config_entry, mock_client)
+
+# -- sensors -----------------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("charx_unit", "unit")
+async def test_the_group_sensors(hass: HomeAssistant, config_entry: MockConfigEntry) -> None:
+    await set_up(hass, config_entry)
+
+    assert float(state(hass, "sensor", "group_active_power").state) == pytest.approx(7398.0)
+    # -1: a configured Charging Point's phase rotation is unknown.
+    assert state(hass, "sensor", "group_current_l1").state == STATE_UNKNOWN
+    assert state(hass, "sensor", "num_charging").state == "1"
+    assert state(hass, "sensor", "num_connected").state == "1"
+    assert state(hass, "sensor", "dynamic_max_current").state == "32"
+
+
+@pytest.mark.usefixtures("charx_unit", "unit")
+async def test_the_charging_point_sensors(
+    hass: HomeAssistant, config_entry: MockConfigEntry
+) -> None:
+    await set_up(hass, config_entry)
+
+    assert state(hass, "sensor", "cp1_vehicle_status").state == "c2"
+    assert float(state(hass, "sensor", "cp1_voltage_l1").state) == pytest.approx(230.1)
+    assert float(state(hass, "sensor", "cp1_current_l1").state) == pytest.approx(10.7)
+    assert float(state(hass, "sensor", "cp1_active_power").state) == pytest.approx(7398.0)
+    assert float(state(hass, "sensor", "cp1_reactive_power").state) == pytest.approx(-40.0)
+    assert float(state(hass, "sensor", "cp1_total_energy").state) == pytest.approx(10450.504)
+    assert float(state(hass, "sensor", "cp1_session_energy").state) == pytest.approx(3.212)
+    assert state(hass, "sensor", "cp1_current_setpoint").state == "16"
+    assert state(hass, "sensor", "cp1_max_current").state == "16"
+    assert state(hass, "sensor", "cp1_connection_time").state == "1830"
+    assert state(hass, "sensor", "cp1_error_code").state == "0x00000000"
+    assert state(hass, "sensor", "cp2_error_code").state == "0x00000040"
+    assert state(hass, "sensor", "cp2_current_l1").state == STATE_UNKNOWN
+
+
+@pytest.mark.usefixtures("charx_unit", "unit")
+async def test_the_state_classes_stay(hass: HomeAssistant, config_entry: MockConfigEntry) -> None:
+    await set_up(hass, config_entry)
+
+    assert state(hass, "sensor", "cp1_total_energy").attributes["state_class"] == "total_increasing"
+    assert state(hass, "sensor", "cp1_session_energy").attributes["state_class"] == "total"
+
+
+async def test_a_lifetime_energy_of_zero_is_unknown(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    # A meter that is starting after a reconnect reports 0 (#38).
+    for address in range(1250, 1254):
+        charx_unit.holding[address] = 0
+
+    await set_up(hass, config_entry)
+
+    assert state(hass, "sensor", "cp1_total_energy").state == STATE_UNKNOWN
+
+
+@pytest.mark.parametrize(("code", "option"), [(b"D1", "d1"), (b"D2", "d2"), (b"F0", "f0")])
+async def test_every_vehicle_status_is_an_option(  # noqa: PLR0913
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    charx_unit: MockModbusUnit,
+    unit: object,
+    code: bytes,
+    option: str,
+) -> None:
+    charx_unit.holding[1299] = int.from_bytes(code, "big")
+
+    await set_up(hass, config_entry)
+
+    sensor = state(hass, "sensor", "cp1_vehicle_status")
+    assert sensor.state == option
+    assert option in sensor.attributes["options"]
+
+
+@pytest.mark.usefixtures("real_unit", "unit")
+async def test_the_real_controller(hass: HomeAssistant, real_entry: MockConfigEntry) -> None:
+    await set_up(hass, real_entry)
+
+    assert state(hass, "sensor", "cp1_vehicle_status", REAL_MAC).state == "a1"
+    assert float(state(hass, "sensor", "cp1_total_energy", REAL_MAC).state) == pytest.approx(
+        10562.978
+    )
+    # 65535: no dynamic limit set.
+    assert state(hass, "sensor", "dynamic_max_current", REAL_MAC).state == STATE_UNKNOWN
+    assert state(hass, "number", "dynamic_max_current_number", REAL_MAC).state == STATE_UNKNOWN
+
+
+# -- binary sensors ----------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("charx_unit", "unit")
+async def test_the_binary_sensors(hass: HomeAssistant, config_entry: MockConfigEntry) -> None:
+    await set_up(hass, config_entry)
+
+    assert state(hass, "binary_sensor", "cp1_connected").state == STATE_ON
+    assert state(hass, "binary_sensor", "cp1_charging").state == STATE_ON
+    assert state(hass, "binary_sensor", "cp1_error").state == STATE_OFF
+    assert state(hass, "binary_sensor", "cp2_connected").state == STATE_OFF
+    assert state(hass, "binary_sensor", "cp2_charging").state == STATE_OFF
+
+
+async def test_an_unread_vehicle_status_is_unknown(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    charx_unit.holding[1299] = 0  # no characters
+
+    await set_up(hass, config_entry)
+
+    assert state(hass, "sensor", "cp1_vehicle_status").state == STATE_UNKNOWN
+    assert state(hass, "binary_sensor", "cp1_connected").state == STATE_UNKNOWN
+
+
+# -- availability ------------------------------------------------------------------
+
+
+async def test_a_failing_charging_point_makes_only_its_entities_unavailable(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    charx_unit: MockModbusUnit,
+    unit: object,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    await set_up(hass, config_entry)
+    charx_unit.fail_read(2232, IllegalDataValueError(3))
+
+    with caplog.at_level(logging.WARNING):
+        await refresh(hass, config_entry)
+
+    assert state(hass, "sensor", "cp2_vehicle_status").state == STATE_UNAVAILABLE
+    assert state(hass, "binary_sensor", "cp2_connected").state == STATE_UNAVAILABLE
+    assert state(hass, "number", "cp2_max_current_number").state == STATE_UNAVAILABLE
+    assert state(hass, "sensor", "cp1_vehicle_status").state == "c2"
+    assert float(state(hass, "sensor", "group_active_power").state) == pytest.approx(7398.0)
+    assert "charging_point_2 failed to refresh" in caplog.text
+
+
+async def test_a_charging_point_that_answers_again_is_available_again(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    charx_unit: MockModbusUnit,
+    unit: object,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    await set_up(hass, config_entry)
+    charx_unit.fail_read(2232, IllegalDataValueError(3))
+    await refresh(hass, config_entry)
+    charx_unit.fail_read(2232, None)
+
+    with caplog.at_level(logging.INFO):
+        await refresh(hass, config_entry)
+
+    assert state(hass, "sensor", "cp2_vehicle_status").state == "a1"
+    assert "charging_point_2 is available again" in caplog.text
+
+
+async def test_a_failing_group_makes_the_hub_entities_unavailable(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    await set_up(hass, config_entry)
+    charx_unit.fail_read(152, IllegalDataValueError(3))
+
+    await refresh(hass, config_entry)
+
+    assert state(hass, "sensor", "group_active_power").state == STATE_UNAVAILABLE
+    assert state(hass, "number", "dynamic_max_current_number").state == STATE_UNAVAILABLE
+    assert state(hass, "sensor", "cp1_vehicle_status").state == "c2"
+
+
+async def test_a_lost_connection_makes_everything_unavailable(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    await set_up(hass, config_entry)
+    charx_unit.fail_requests(ModbusConnectionError("gone"))
+
+    await refresh(hass, config_entry)
+
+    assert state(hass, "sensor", "group_active_power").state == STATE_UNAVAILABLE
+    assert state(hass, "sensor", "cp1_vehicle_status").state == STATE_UNAVAILABLE
+
+
+async def test_every_part_failing_makes_everything_unavailable(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    await set_up(hass, config_entry)
+    for address in (100, 152, 1232, 2232):
+        charx_unit.fail_read(address, IllegalDataValueError(3))
+
+    await refresh(hass, config_entry)
+
+    assert not config_entry.runtime_data.last_update_success
+    assert state(hass, "sensor", "cp1_vehicle_status").state == STATE_UNAVAILABLE
+
+
+# -- switches ----------------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("unit")
+async def test_the_switches_in_release_mode_modbus(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit
+) -> None:
+    # The synthetic Charging Points are in release mode Modbus.
+    await set_up(hass, config_entry)
+    events = writes(charx_unit)
+
+    assert state(hass, "switch", "cp1_charging_release").state == STATE_ON
+    assert state(hass, "switch", "cp1_availability").state == STATE_ON
+    await hass.services.async_call(
+        "switch",
+        "turn_off",
+        {"entity_id": entity_id(hass, "switch", "cp1_charging_release")},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "switch",
+        "turn_off",
+        {"entity_id": entity_id(hass, "switch", "cp1_availability")},
+        blocking=True,
+    )
+
+    assert [(e.address, e.values, e.function_code) for e in events] == [
+        (1300, [0], 0x10),
+        (1304, [0], 0x10),
+    ]
+    assert state(hass, "switch", "cp1_charging_release").state == STATE_OFF
+    assert state(hass, "switch", "cp1_availability").state == STATE_OFF
+
+
+@pytest.mark.usefixtures("unit")
+async def test_the_switches_are_unavailable_in_release_mode_ocpp(
+    hass: HomeAssistant,
+    real_entry: MockConfigEntry,
+    real_unit: MockModbusUnit,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.INFO):
+        await set_up(hass, real_entry)
+
+    assert state(hass, "switch", "cp1_charging_release", REAL_MAC).state == STATE_UNAVAILABLE
+    assert state(hass, "switch", "cp1_availability", REAL_MAC).state == STATE_UNAVAILABLE
+    assert "Charging Point 1 is in release mode OCPP" in caplog.text
+    # The rest of the Charging Point is available.
+    assert state(hass, "sensor", "cp1_vehicle_status", REAL_MAC).state == "a1"
+
+
+async def test_a_failed_switch_write_raises(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    await set_up(hass, config_entry)
+    charx_unit.fail_write(1300, IllegalDataValueError(3))
+
+    with pytest.raises(HomeAssistantError, match="Writing switch.*failed"):
         await hass.services.async_call(
-            SWITCH_DOMAIN, "turn_on",
-            {"entity_id": "switch.charging_point_1_charging_release"},
+            "switch",
+            "turn_off",
+            {"entity_id": entity_id(hass, "switch", "cp1_charging_release")},
             blocking=True,
         )
-        mock_client.set_charging_release.assert_awaited_once_with(1, True)
 
-    async def test_turn_off_charging_release_calls_client(self, hass, config_entry, mock_client):
-        await _setup(hass, config_entry, mock_client)
+
+# -- numbers -----------------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("unit")
+async def test_the_max_current(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit
+) -> None:
+    await set_up(hass, config_entry)
+    events = writes(charx_unit)
+    number = entity_id(hass, "number", "cp1_max_current_number")
+    assert float(state(hass, "number", "cp1_max_current_number").state) == 16
+
+    await hass.services.async_call(
+        "number", "set_value", {"entity_id": number, "value": 10}, blocking=True
+    )
+
+    assert [(e.address, e.values, e.function_code) for e in events] == [(1301, [10], 0x10)]
+    assert float(state(hass, "number", "cp1_max_current_number").state) == 10
+
+
+@pytest.mark.usefixtures("unit")
+async def test_the_dynamic_max_current_in_release_mode_ocpp(
+    hass: HomeAssistant, real_entry: MockConfigEntry, real_unit: MockModbusUnit
+) -> None:
+    # Load management works next to an OCPP backend (as tested on the real controller).
+    await set_up(hass, real_entry)
+    events = writes(real_unit)
+
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": entity_id(hass, "number", "dynamic_max_current_number", REAL_MAC), "value": 16},
+        blocking=True,
+    )
+
+    assert [(e.address, e.values, e.function_code) for e in events] == [(167, [16], 0x10)]
+    assert float(state(hass, "number", "dynamic_max_current_number", REAL_MAC).state) == 16
+
+
+async def test_a_failed_number_write_raises(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    await set_up(hass, config_entry)
+    charx_unit.fail_write(167, ModbusConnectionError("gone"))
+
+    with pytest.raises(HomeAssistantError, match="gone"):
         await hass.services.async_call(
-            SWITCH_DOMAIN, "turn_off",
-            {"entity_id": "switch.charging_point_1_charging_release"},
+            "number",
+            "set_value",
+            {"entity_id": entity_id(hass, "number", "dynamic_max_current_number"), "value": 20},
             blocking=True,
         )
-        mock_client.set_charging_release.assert_awaited_once_with(1, False)
 
-    async def test_turn_on_charging_release_raises_on_write_failure(
-        self, hass, config_entry, mock_client
-    ):
-        mock_client.set_charging_release.side_effect = CharxConnectionError(
-            "device offline"
-        )
-        await _setup(hass, config_entry, mock_client)
 
-        with pytest.raises(
-            HomeAssistantError,
-            match="Failed to enable charging release on CP1: device offline",
-        ):
-            await hass.services.async_call(
-                SWITCH_DOMAIN, "turn_on",
-                {"entity_id": "switch.charging_point_1_charging_release"},
-                blocking=True,
-            )
+# -- a Charging Point the controller no longer reports -----------------------------
 
-    async def test_availability_switch_on(self, hass, config_entry, mock_client):
-        await _setup(hass, config_entry, mock_client)
-        state = hass.states.get("switch.charging_point_1_available")
-        assert state.state == STATE_ON  # fixture: available=True
 
-    async def test_turn_off_availability_calls_client(self, hass, config_entry, mock_client):
-        await _setup(hass, config_entry, mock_client)
+async def test_a_charging_point_the_controller_no_longer_reports_is_unavailable(
+    hass: HomeAssistant, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    # An entry of three points; the controller now counts two. The registry still has
+    # point 3's entities from before, which must not break setup.
+    from .conftest import make_entry  # noqa: PLC0415
+
+    entry = make_entry(num_charging_points=3)
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "sensor", DOMAIN, f"{SYNTHETIC_MAC}_cp3_vehicle_status", config_entry=entry
+    )
+
+    await set_up(hass, entry)
+
+    stale = hass.states.get(entity_id(hass, "sensor", "cp3_vehicle_status"))
+    assert stale is None or stale.state == STATE_UNAVAILABLE
+    assert state(hass, "sensor", "cp2_vehicle_status").state == "a1"
+
+
+@pytest.mark.usefixtures("unit")
+async def test_the_switches_turn_on(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit
+) -> None:
+    charx_unit.holding[1300] = 0
+    charx_unit.holding[1304] = 0
+    await set_up(hass, config_entry)
+    events = writes(charx_unit)
+
+    for suffix in ("cp1_charging_release", "cp1_availability"):
         await hass.services.async_call(
-            SWITCH_DOMAIN, "turn_off",
-            {"entity_id": "switch.charging_point_1_available"},
-            blocking=True,
+            "switch", "turn_on", {"entity_id": entity_id(hass, "switch", suffix)}, blocking=True
         )
-        mock_client.set_availability.assert_awaited_once_with(1, False)
 
-    async def test_turn_off_availability_raises_on_write_failure(
-        self, hass, config_entry, mock_client
-    ):
-        mock_client.set_availability.side_effect = CharxConnectionError(
-            "device offline"
-        )
-        await _setup(hass, config_entry, mock_client)
-
-        with pytest.raises(
-            HomeAssistantError,
-            match="Failed to set CP1 to status F: device offline",
-        ):
-            await hass.services.async_call(
-                SWITCH_DOMAIN, "turn_off",
-                {"entity_id": "switch.charging_point_1_available"},
-                blocking=True,
-            )
+    assert [(e.address, e.values) for e in events] == [(1300, [1]), (1304, [1])]
 
 
-# ---------------------------------------------------------------------------
-# Numbers
-# ---------------------------------------------------------------------------
+async def test_a_write_to_a_charging_point_the_controller_dropped_raises(
+    hass: HomeAssistant, config_entry: MockConfigEntry, charx_unit: MockModbusUnit, unit: object
+) -> None:
+    # Home Assistant calls no service on the entity then, since it is unavailable; the
+    # guard covers a direct call.
+    await set_up(hass, config_entry)
+    delattr(config_entry.runtime_data.controller, "charging_point_1")
+    number = hass.data["entity_components"]["number"].get_entity(
+        entity_id(hass, "number", "cp1_max_current_number")
+    )
 
-class TestNumbers:
-    async def test_max_current_initial_value(self, hass, config_entry, mock_client):
-        await _setup(hass, config_entry, mock_client)
-        state = hass.states.get("number.charging_point_1_max_current")
-        assert float(state.state) == 16.0  # fixture: max_current_a=16
-
-    async def test_set_max_current_calls_client(self, hass, config_entry, mock_client):
-        await _setup(hass, config_entry, mock_client)
-        await hass.services.async_call(
-            NUMBER_DOMAIN, "set_value",
-            {"entity_id": "number.charging_point_1_max_current", "value": 11},
-            blocking=True,
-        )
-        mock_client.set_max_current.assert_awaited_once_with(1, 11)
-
-    async def test_set_max_current_raises_on_write_failure(
-        self, hass, config_entry, mock_client
-    ):
-        mock_client.set_max_current.side_effect = CharxConnectionError(
-            "device offline"
-        )
-        await _setup(hass, config_entry, mock_client)
-
-        with pytest.raises(
-            HomeAssistantError,
-            match="Failed to set max current on CP1: device offline",
-        ):
-            await hass.services.async_call(
-                NUMBER_DOMAIN, "set_value",
-                {"entity_id": "number.charging_point_1_max_current", "value": 11},
-                blocking=True,
-            )
-
-    async def test_set_max_current_raises_on_invalid_value(
-        self, hass, config_entry, mock_client
-    ):
-        mock_client.set_max_current.side_effect = ValueError("out of range")
-        await _setup(hass, config_entry, mock_client)
-
-        with pytest.raises(
-            HomeAssistantError,
-            match="Invalid max current value 11: out of range",
-        ):
-            await hass.services.async_call(
-                NUMBER_DOMAIN, "set_value",
-                {"entity_id": "number.charging_point_1_max_current", "value": 11},
-                blocking=True,
-            )
-
-    async def test_dynamic_max_current_initial_value(self, hass, config_entry, mock_client):
-        await _setup(hass, config_entry, mock_client)
-        state = hass.states.get("number.charx_sec_3000_group_dynamic_max_current")
-        assert float(state.state) == 32.0  # fixture: dynamic_max_current_a=32
-
-    async def test_dynamic_max_current_none_is_unknown(self, hass, config_entry, mock_client):
-        data = fake_charx_data(dynamic_max_current_a=None)
-        await _setup(hass, config_entry, mock_client, data)
-        state = hass.states.get("number.charx_sec_3000_group_dynamic_max_current")
-        assert state.state == STATE_UNKNOWN
-
-    async def test_set_dynamic_max_current_calls_client(self, hass, config_entry, mock_client):
-        await _setup(hass, config_entry, mock_client)
-        await hass.services.async_call(
-            NUMBER_DOMAIN, "set_value",
-            {"entity_id": "number.charx_sec_3000_group_dynamic_max_current", "value": 48},
-            blocking=True,
-        )
-        mock_client.set_dynamic_max_current.assert_awaited_once_with(48)
-
-    async def test_set_dynamic_max_current_raises_on_write_failure(
-        self, hass, config_entry, mock_client
-    ):
-        mock_client.set_dynamic_max_current.side_effect = CharxConnectionError(
-            "device offline"
-        )
-        await _setup(hass, config_entry, mock_client)
-
-        with pytest.raises(
-            HomeAssistantError,
-            match="Failed to set dynamic max current on CP group: device offline",
-        ):
-            await hass.services.async_call(
-                NUMBER_DOMAIN, "set_value",
-                {"entity_id": "number.charx_sec_3000_group_dynamic_max_current", "value": 48},
-                blocking=True,
-            )
-
-
-# ---------------------------------------------------------------------------
-# CP data availability
-# ---------------------------------------------------------------------------
-
-class TestCpDataAvailability:
-    async def test_sensor_unknown_when_cp_missing_from_coordinator(
-        self, hass, config_entry, mock_client
-    ):
-        await _setup(hass, config_entry, mock_client)
-        mock_client.fetch_data = AsyncMock(
-            return_value=CharxData(device_info=fake_device_info(), charging_points=[])
-        )
-        coordinator = config_entry.runtime_data
-        await coordinator.async_refresh()
-        await hass.async_block_till_done()
-        state = hass.states.get("sensor.charging_point_1_voltage_l1")
-        assert state.state == STATE_UNKNOWN
-
-    async def test_binary_sensor_unknown_when_cp_missing_from_coordinator(
-        self, hass, config_entry, mock_client
-    ):
-        await _setup(hass, config_entry, mock_client)
-        mock_client.fetch_data = AsyncMock(
-            return_value=CharxData(device_info=fake_device_info(), charging_points=[])
-        )
-        coordinator = config_entry.runtime_data
-        await coordinator.async_refresh()
-        await hass.async_block_till_done()
-        state = hass.states.get("binary_sensor.charging_point_1_connected")
-        assert state.state == STATE_UNKNOWN
-
-    async def test_switch_unknown_when_cp_missing_from_coordinator(
-        self, hass, config_entry, mock_client
-    ):
-        await _setup(hass, config_entry, mock_client)
-        mock_client.fetch_data = AsyncMock(
-            return_value=CharxData(device_info=fake_device_info(), charging_points=[])
-        )
-        coordinator = config_entry.runtime_data
-        await coordinator.async_refresh()
-        await hass.async_block_till_done()
-        state = hass.states.get("switch.charging_point_1_charging_release")
-        assert state.state == STATE_UNKNOWN
-
-    async def test_number_unknown_when_cp_missing_from_coordinator(
-        self, hass, config_entry, mock_client
-    ):
-        await _setup(hass, config_entry, mock_client)
-        mock_client.fetch_data = AsyncMock(
-            return_value=CharxData(device_info=fake_device_info(), charging_points=[])
-        )
-        coordinator = config_entry.runtime_data
-        await coordinator.async_refresh()
-        await hass.async_block_till_done()
-        state = hass.states.get("number.charging_point_1_max_current")
-        assert state.state == STATE_UNKNOWN
+    with pytest.raises(HomeAssistantError, match="doesn't report Charging Point 1"):
+        await number.async_set_native_value(10)

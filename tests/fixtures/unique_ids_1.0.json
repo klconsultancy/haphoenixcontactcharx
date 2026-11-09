@@ -1,0 +1,49 @@
+{
+  "source": "The unique IDs haphoenixcontactcharx 1.0.x creates, read from its source (sensor.py, binary_sensor.py, switch.py, number.py at v1.0.2). {mac} is the config entry's MAC, {n} a Charging Point's number. 2.0 must create exactly these, so existing entities keep their history.",
+  "hub": {
+    "sensor": [
+      "group_active_power",
+      "group_current_l1",
+      "group_current_l2",
+      "group_current_l3",
+      "num_charging",
+      "num_connected",
+      "dynamic_max_current"
+    ],
+    "number": [
+      "dynamic_max_current_number"
+    ]
+  },
+  "charging_point": {
+    "sensor": [
+      "vehicle_status",
+      "voltage_l1",
+      "voltage_l2",
+      "voltage_l3",
+      "current_l1",
+      "current_l2",
+      "current_l3",
+      "active_power",
+      "reactive_power",
+      "apparent_power",
+      "total_energy",
+      "session_energy",
+      "current_setpoint",
+      "max_current",
+      "connection_time",
+      "error_code"
+    ],
+    "binary_sensor": [
+      "connected",
+      "charging",
+      "error"
+    ],
+    "switch": [
+      "charging_release",
+      "availability"
+    ],
+    "number": [
+      "max_current_number"
+    ]
+  }
+}

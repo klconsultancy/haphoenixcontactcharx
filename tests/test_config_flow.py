@@ -1,402 +1,280 @@
-"""Tests for the Phoenix Contact CHARX config flow."""
+"""The config flow: the user step, DHCP discovery, the cap on Charging Points, reconfigure."""
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+from homeassistant.config_entries import SOURCE_DHCP, SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
-
-from aiophoenixcontactcharx import CharxConnectionError, CharxModbusError
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+from modbus_connection.exceptions import (
+    IllegalDataValueError,
+    ModbusConnectionError,
+    ModbusTimeoutError,
+)
 
 from custom_components.phoenixcontact_charx.const import DOMAIN
 
+from .conftest import SYNTHETIC_MAC, make_entry
 
-async def _init_flow(hass):
-    return await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "user"}
-    )
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    from modbus_connection.mock import MockModbusUnit
 
-
-async def _submit(hass, flow_id, host="192.168.1.100", port=502):
-    return await hass.config_entries.flow.async_configure(
-        flow_id, {"host": host, "port": port}
-    )
+USER_INPUT = {"host": "192.0.2.15", "port": 502}
+DHCP = DhcpServiceInfo(ip="192.0.2.15", hostname="ev3000", macaddress="a8741d0012ab")
 
 
-# ---------------------------------------------------------------------------
-# Success path
-# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def no_setup() -> Iterator[AsyncMock]:
+    """Keep a created entry from being set up."""
+    with patch(
+        "custom_components.phoenixcontact_charx.async_setup_entry", return_value=True
+    ) as mock:
+        yield mock
 
-async def test_form_shown(hass):
-    result = await _init_flow(hass)
-    assert result["type"] == FlowResultType.FORM
+
+async def start(hass: HomeAssistant, user_input: dict[str, Any] | None = None) -> Any:  # noqa: ANN401
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    if user_input is None:
+        return result
+    return await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
+
+
+# -- the user step -----------------------------------------------------------------
+
+
+async def test_the_form(hass: HomeAssistant) -> None:
+    result = await start(hass)
+
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
-    assert result["errors"] == {}
 
 
-async def test_successful_setup(hass, mock_client):
+@pytest.mark.usefixtures("charx_unit", "temporary_unit")
+async def test_a_controller_is_added(hass: HomeAssistant) -> None:
+    result = await start(hass, USER_INPUT)
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "CHARX SEC-3100"
+    # The MAC in 1.x's uppercase form, which existing entries and devices use.
+    assert result["result"].unique_id == SYNTHETIC_MAC
+    assert result["data"] == {
+        "host": "192.0.2.15",
+        "port": 502,
+        "mac": SYNTHETIC_MAC,
+        "num_charging_points": 2,
+    }
+
+
+@pytest.mark.usefixtures("charx_unit", "temporary_unit")
+async def test_the_host_is_stripped(hass: HomeAssistant) -> None:
+    result = await start(hass, {"host": "  192.0.2.15 ", "port": 502})
+
+    assert result["data"]["host"] == "192.0.2.15"
+
+
+async def test_a_controller_without_a_designation_is_titled_by_its_host(
+    hass: HomeAssistant, charx_unit: MockModbusUnit, temporary_unit: object
+) -> None:
+    for address in range(100, 110):
+        charx_unit.holding[address] = 0
+
+    result = await start(hass, USER_INPUT)
+
+    assert result["title"] == "CHARX @ 192.0.2.15"
+
+
+@pytest.mark.parametrize(
+    ("failure", "error"),
+    [
+        (ModbusConnectionError("refused"), "cannot_connect"),
+        (ModbusTimeoutError("silent"), "cannot_connect"),
+        (IllegalDataValueError(3), "modbus_error"),
+    ],
+)
+async def test_a_controller_that_does_not_answer_shows_an_error(
+    hass: HomeAssistant,
+    charx_unit: MockModbusUnit,
+    temporary_unit: object,
+    failure: Exception,
+    error: str,
+) -> None:
+    charx_unit.fail_requests(failure)
+
+    result = await start(hass, USER_INPUT)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": error}
+
+
+async def test_an_unreadable_identity_shows_an_error(
+    hass: HomeAssistant, charx_unit: MockModbusUnit, temporary_unit: object
+) -> None:
+    # The count reads, the identity doesn't: no MAC to identify the controller by.
+    charx_unit.fail_read(115, IllegalDataValueError(3))
+
+    result = await start(hass, USER_INPUT)
+
+    assert result["errors"] == {"base": "modbus_error"}
+
+
+async def test_an_address_another_integration_holds_shows_an_error(
+    hass: HomeAssistant,
+) -> None:
     with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(return_value={
-            "title": "CHARX SEC-3000",
-            "mac": "AA:BB:CC:DD:EE:FF",
-            "num_charging_points": 2,
-        }),
+        "custom_components.phoenixcontact_charx.config_flow.async_get_temporary_unit",
+        side_effect=HomeAssistantError("in use"),
     ):
-        result = await _init_flow(hass)
-        result = await _submit(hass, result["flow_id"])
-    await hass.async_block_till_done()
+        result = await start(hass, USER_INPUT)
 
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["title"] == "CHARX SEC-3000"
-    assert result["data"]["host"] == "192.168.1.100"
-    assert result["data"]["port"] == 502
-    assert result["data"]["mac"] == "AA:BB:CC:DD:EE:FF"
-    assert result["data"]["num_charging_points"] == 2
+    assert result["errors"] == {"base": "connection_in_use"}
 
 
-async def test_host_is_stripped(hass, mock_client):
-    """Leading/trailing whitespace in the host field is stripped."""
+async def test_an_unexpected_error_shows_an_error(hass: HomeAssistant) -> None:
     with patch(
         "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(return_value={
-            "title": "CHARX",
-            "mac": "00:11:22:33:44:55",
-            "num_charging_points": 1,
-        }),
-    ) as mock_probe:
-        result = await _init_flow(hass)
-        await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"host": "  192.168.1.1  ", "port": 502}
-        )
-    await hass.async_block_till_done()
-
-    called_host = mock_probe.call_args[0][0]
-    assert called_host == "192.168.1.1"
-
-
-async def test_cap_warning_shown_when_cp_count_exceeds_max(hass, mock_client):
-    """Device reporting >12 CPs triggers the cap_confirm warning step."""
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(return_value={
-            "title": "CHARX",
-            "mac": "00:11:22:33:44:55",
-            "num_charging_points": 50,
-        }),
+        side_effect=RuntimeError("boom"),
     ):
-        result = await _init_flow(hass)
-        result = await _submit(hass, result["flow_id"])
+        result = await start(hass, USER_INPUT)
 
-    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {"base": "unknown"}
+
+
+@pytest.mark.usefixtures("charx_unit", "temporary_unit")
+async def test_a_configured_controller_aborts_and_updates_its_host(hass: HomeAssistant) -> None:
+    entry = make_entry()
+    entry.add_to_hass(hass)
+
+    result = await start(hass, {"host": "192.0.2.99", "port": 502})
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data["host"] == "192.0.2.99"
+
+
+# -- the cap on Charging Points ----------------------------------------------------
+
+
+async def test_more_than_twelve_charging_points_asks_to_confirm_the_cap(
+    hass: HomeAssistant, charx_unit: MockModbusUnit, temporary_unit: object
+) -> None:
+    charx_unit.holding[114] = 13
+
+    result = await start(hass, USER_INPUT)
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "cap_confirm"
-    assert result["description_placeholders"]["detected"] == "50"
-    assert result["description_placeholders"]["cap"] == "12"
+    assert result["description_placeholders"] == {"detected": "13", "cap": "12"}
 
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
-async def test_num_charging_points_capped_at_12(hass, mock_client):
-    """Confirming the cap warning creates the entry with MAX_CHARGING_POINTS."""
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(return_value={
-            "title": "CHARX",
-            "mac": "00:11:22:33:44:55",
-            "num_charging_points": 50,
-        }),
-    ):
-        result = await _init_flow(hass)
-        result = await _submit(hass, result["flow_id"])
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-    await hass.async_block_till_done()
-
-    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["num_charging_points"] == 12
 
 
-# ---------------------------------------------------------------------------
-# Error paths
-# ---------------------------------------------------------------------------
-
-async def test_cannot_connect_shows_error(hass):
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(side_effect=CharxConnectionError("timeout")),
-    ):
-        result = await _init_flow(hass)
-        result = await _submit(hass, result["flow_id"])
-
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"]["base"] == "cannot_connect"
+# -- DHCP discovery ----------------------------------------------------------------
 
 
-async def test_modbus_error_shows_error(hass):
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(side_effect=CharxModbusError("exception response")),
-    ):
-        result = await _init_flow(hass)
-        result = await _submit(hass, result["flow_id"])
+async def test_a_discovered_controller_is_confirmed_then_added(
+    hass: HomeAssistant, charx_unit: MockModbusUnit, temporary_unit: object
+) -> None:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_DHCP}, data=DHCP
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "dhcp_confirm"
 
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"]["base"] == "modbus_error"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
-
-async def test_unknown_exception_shows_error(hass):
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(side_effect=RuntimeError("unexpected")),
-    ):
-        result = await _init_flow(hass)
-        result = await _submit(hass, result["flow_id"])
-
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"]["base"] == "unknown"
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["result"].unique_id == SYNTHETIC_MAC
 
 
-# ---------------------------------------------------------------------------
-# Duplicate device
-# ---------------------------------------------------------------------------
+async def test_a_discovered_controller_already_configured_updates_its_ip(
+    hass: HomeAssistant,
+) -> None:
+    entry = make_entry()
+    entry.add_to_hass(hass)
 
-async def test_already_configured_aborts(hass, config_entry):
-    """Second setup attempt for the same MAC is rejected."""
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(return_value={
-            "title": "CHARX SEC-3000",
-            "mac": "AA:BB:CC:DD:EE:FF",  # same MAC as config_entry fixture
-            "num_charging_points": 1,
-        }),
-    ):
-        result = await _init_flow(hass)
-        result = await _submit(hass, result["flow_id"])
-
-    assert result["type"] == FlowResultType.ABORT
-    assert result["reason"] == "already_configured"
-
-
-# ---------------------------------------------------------------------------
-# Reconfigure flow
-# ---------------------------------------------------------------------------
-
-async def _init_reconfigure(hass, config_entry):
-    return await hass.config_entries.flow.async_init(
+    result = await hass.config_entries.flow.async_init(
         DOMAIN,
-        context={"source": "reconfigure", "entry_id": config_entry.entry_id},
+        context={"source": SOURCE_DHCP},
+        data=DhcpServiceInfo(ip="192.0.2.77", hostname="ev3000", macaddress="a8741d0012ab"),
     )
 
+    assert result["type"] is FlowResultType.ABORT
+    assert entry.data["host"] == "192.0.2.77"
 
-async def test_reconfigure_form_shown(hass, config_entry):
-    result = await _init_reconfigure(hass, config_entry)
-    assert result["type"] == FlowResultType.FORM
+
+async def test_a_discovered_controller_that_does_not_answer_shows_an_error(
+    hass: HomeAssistant, charx_unit: MockModbusUnit, temporary_unit: object
+) -> None:
+    charx_unit.fail_requests(ModbusConnectionError("refused"))
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_DHCP}, data=DHCP
+    )
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+    assert result["errors"] == {"base": "cannot_connect"}
+
+
+# -- reconfigure -------------------------------------------------------------------
+
+
+async def reconfigure(hass: HomeAssistant, user_input: dict[str, Any]) -> Any:  # noqa: ANN401
+    entry = make_entry(num_charging_points=1)
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
     assert result["step_id"] == "reconfigure"
+    return entry, await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
 
 
-async def test_reconfigure_updates_cp_count(hass, config_entry, mock_client):
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(return_value={
-            "title": "CHARX SEC-3000",
-            "mac": "AA:BB:CC:DD:EE:FF",
-            "num_charging_points": 4,
-        }),
-    ):
-        result = await _init_reconfigure(hass, config_entry)
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"host": "192.168.1.100", "port": 502}
-        )
-    await hass.async_block_till_done()
+@pytest.mark.usefixtures("charx_unit", "temporary_unit")
+async def test_reconfigure_moves_the_entry_and_counts_again(hass: HomeAssistant) -> None:
+    entry, result = await reconfigure(hass, {"host": "192.0.2.20", "port": 502})
 
-    assert result["type"] == FlowResultType.ABORT
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
-    assert config_entry.data["num_charging_points"] == 4
-    assert config_entry.data["mac"] == "AA:BB:CC:DD:EE:FF"  # MAC must not change
+    assert entry.data["host"] == "192.0.2.20"
+    assert entry.data["num_charging_points"] == 2
 
 
-async def test_reconfigure_shows_cap_warning_when_exceeded(hass, config_entry, mock_client):
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(return_value={
-            "title": "CHARX SEC-3000",
-            "mac": "AA:BB:CC:DD:EE:FF",
-            "num_charging_points": 20,
-        }),
-    ):
-        result = await _init_reconfigure(hass, config_entry)
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"host": "192.168.1.100", "port": 502}
-        )
+async def test_reconfigure_to_another_controller_shows_an_error(
+    hass: HomeAssistant, charx_unit: MockModbusUnit, temporary_unit: object
+) -> None:
+    charx_unit.holding[117] = 0x9999  # another MAC
 
-    assert result["type"] == FlowResultType.FORM
+    _, result = await reconfigure(hass, {"host": "192.0.2.20", "port": 502})
+
+    assert result["errors"] == {"base": "wrong_device"}
+
+
+async def test_reconfigure_past_the_cap_confirms_it(
+    hass: HomeAssistant, charx_unit: MockModbusUnit, temporary_unit: object
+) -> None:
+    charx_unit.holding[114] = 13
+    entry, result = await reconfigure(hass, {"host": "192.0.2.20", "port": 502})
     assert result["step_id"] == "cap_confirm"
-    assert result["description_placeholders"]["detected"] == "20"
 
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
-async def test_reconfigure_cap_confirm_caps_at_max(hass, config_entry, mock_client):
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(return_value={
-            "title": "CHARX SEC-3000",
-            "mac": "AA:BB:CC:DD:EE:FF",
-            "num_charging_points": 20,
-        }),
-    ):
-        result = await _init_reconfigure(hass, config_entry)
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"host": "192.168.1.100", "port": 502}
-        )
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-    await hass.async_block_till_done()
-
-    assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
-    assert config_entry.data["num_charging_points"] == 12
+    assert entry.data["num_charging_points"] == 12
 
 
-async def test_reconfigure_wrong_device_shows_error(hass, config_entry):
-    """Probed MAC differs from stored MAC → wrong_device error."""
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(return_value={
-            "title": "CHARX SEC-3000",
-            "mac": "11:22:33:44:55:66",  # different from config_entry fixture MAC
-            "num_charging_points": 1,
-        }),
-    ):
-        result = await _init_reconfigure(hass, config_entry)
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"host": "192.168.1.200", "port": 502}
-        )
-
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"]["base"] == "wrong_device"
-
-
-async def test_reconfigure_connection_error_shows_error(hass, config_entry):
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(side_effect=CharxConnectionError("timeout")),
-    ):
-        result = await _init_reconfigure(hass, config_entry)
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"host": "192.168.1.100", "port": 502}
-        )
-
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"]["base"] == "cannot_connect"
-
-
-# ---------------------------------------------------------------------------
-# DHCP discovery flow
-# ---------------------------------------------------------------------------
-
-_DHCP_INFO = DhcpServiceInfo(
-    ip="192.168.1.50",
-    hostname="ev3000",
-    macaddress="a8741d50d1a3",
-)
-
-
-async def _init_dhcp(hass, dhcp_info=_DHCP_INFO):
-    return await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "dhcp"}, data=dhcp_info
+async def test_a_step_reached_without_its_data_starts_over(hass: HomeAssistant) -> None:
+    from custom_components.phoenixcontact_charx.config_flow import (  # noqa: PLC0415
+        CharxConfigFlow,
     )
 
+    flow = CharxConfigFlow()
+    flow.hass = hass
 
-async def test_dhcp_discovery_shows_confirm_form(hass):
-    result = await _init_dhcp(hass)
-
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "dhcp_confirm"
-
-
-async def test_dhcp_confirm_creates_entry(hass, mock_coordinator):
-    """Confirming discovery probes the device and creates the config entry."""
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(return_value={
-            "title": "CHARX SEC-3000",
-            "mac": "A8:74:1D:50:D1:A3",
-            "num_charging_points": 1,
-        }),
-    ):
-        result = await _init_dhcp(hass)
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-    await hass.async_block_till_done()
-
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["data"]["host"] == "192.168.1.50"
-    assert result["data"]["port"] == 502
-    assert result["data"]["mac"] == "A8:74:1D:50:D1:A3"
-    assert result["data"]["num_charging_points"] == 1
-
-
-async def test_dhcp_confirm_stale_dhcp_aborts_if_probed_mac_already_configured(
-    hass, config_entry, mock_coordinator
-):
-    """If the IP was reassigned since discovery, the probed MAC gates duplicate detection."""
-    dhcp_info = DhcpServiceInfo(
-        ip="192.168.1.50",
-        hostname="ev3000",
-        macaddress="a8741d50d1a3",  # unknown MAC — not in any config entry
-    )
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(return_value={
-            "title": "CHARX SEC-3000",
-            "mac": "AA:BB:CC:DD:EE:FF",  # probed MAC matches existing config_entry
-            "num_charging_points": 1,
-        }),
-    ):
-        result = await _init_dhcp(hass, dhcp_info)
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-
-    assert result["type"] == FlowResultType.ABORT
-    assert result["reason"] == "already_configured"
-
-
-async def test_dhcp_confirm_cap_exceeded_goes_to_cap_confirm(hass):
-    """Confirming discovery with >12 CPs routes to the cap_confirm warning step."""
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(return_value={
-            "title": "CHARX",
-            "mac": "A8:74:1D:50:D1:A3",
-            "num_charging_points": 20,
-        }),
-    ):
-        result = await _init_dhcp(hass)
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "cap_confirm"
-    assert result["description_placeholders"]["detected"] == "20"
-
-
-async def test_dhcp_confirm_connection_error_shows_error(hass):
-    """If probe fails on confirm, the form is re-shown with an error."""
-    with patch(
-        "custom_components.phoenixcontact_charx.config_flow._validate_and_probe",
-        AsyncMock(side_effect=CharxConnectionError("timeout")),
-    ):
-        result = await _init_dhcp(hass)
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "dhcp_confirm"
-    assert result["errors"]["base"] == "cannot_connect"
-
-
-async def test_dhcp_already_configured_updates_ip_and_aborts(hass, config_entry):
-    """Rediscovery of a known MAC silently updates the host and aborts."""
-    dhcp_info = DhcpServiceInfo(
-        ip="192.168.1.99",
-        hostname="ev3000",
-        macaddress="aabbccddeeff",  # matches config_entry unique_id AA:BB:CC:DD:EE:FF
-    )
-    result = await _init_dhcp(hass, dhcp_info)
-
-    assert result["type"] == FlowResultType.ABORT
-    assert result["reason"] == "already_configured"
-    assert config_entry.data["host"] == "192.168.1.99"
+    for step in (flow.async_step_cap_confirm, flow.async_step_dhcp_confirm):
+        result = await step()
+        assert result["step_id"] == "user"

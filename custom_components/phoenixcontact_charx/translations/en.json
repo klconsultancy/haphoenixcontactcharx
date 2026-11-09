@@ -28,9 +28,10 @@
     },
     "error": {
       "cannot_connect": "Cannot connect to the controller. Check the IP address, that port 502 is open (WBM → Network → Port Sharing), and that the Modbus server is enabled (WBM → System Control → Status).",
-      "modbus_error": "Connected but received a Modbus error. Check that the Modbus server is running.",
+      "modbus_error": "Connected, but the controller didn't report its identity. Check that the Modbus server is running.",
       "unknown": "Unexpected error. Check the Home Assistant logs for details.",
-      "wrong_device": "The controller at this address is a different device. To switch controllers, remove this entry and add it again."
+      "wrong_device": "The controller at this address is a different device. To switch controllers, remove this entry and add it again.",
+      "connection_in_use": "Another integration already uses this controller with different Modbus connection settings."
     },
     "abort": {
       "already_configured": "This CHARX controller is already configured."
@@ -38,13 +39,27 @@
   },
   "entity": {
     "sensor": {
-      "group_active_power": { "name": "Group Active Power" },
-      "group_current_l1": { "name": "Group Current L1" },
-      "group_current_l2": { "name": "Group Current L2" },
-      "group_current_l3": { "name": "Group Current L3" },
-      "num_charging": { "name": "Active Charging Sessions" },
-      "num_connected": { "name": "Connected Vehicles" },
-      "dynamic_max_current": { "name": "Dynamic Max Current" },
+      "group_active_power": {
+        "name": "Group Active Power"
+      },
+      "group_current_l1": {
+        "name": "Group Current L1"
+      },
+      "group_current_l2": {
+        "name": "Group Current L2"
+      },
+      "group_current_l3": {
+        "name": "Group Current L3"
+      },
+      "num_charging": {
+        "name": "Active Charging Sessions"
+      },
+      "num_connected": {
+        "name": "Connected Vehicles"
+      },
+      "dynamic_max_current": {
+        "name": "Dynamic Max Current"
+      },
       "vehicle_status": {
         "name": "Vehicle Status",
         "state": {
@@ -54,39 +69,102 @@
           "b2": "Connected (no supply)",
           "c1": "Charging request",
           "c2": "Charging",
+          "d1": "Charging request (ventilation)",
+          "d2": "Charging (ventilation)",
           "e0": "Error",
           "f0": "Unavailable",
           "in": "Initialising"
         }
       },
-      "voltage_l1": { "name": "Voltage L1" },
-      "voltage_l2": { "name": "Voltage L2" },
-      "voltage_l3": { "name": "Voltage L3" },
-      "current_l1": { "name": "Current L1" },
-      "current_l2": { "name": "Current L2" },
-      "current_l3": { "name": "Current L3" },
-      "active_power": { "name": "Active Power" },
-      "reactive_power": { "name": "Reactive Power" },
-      "apparent_power": { "name": "Apparent Power" },
-      "total_energy": { "name": "Total Energy" },
-      "session_energy": { "name": "Session Energy" },
-      "current_setpoint": { "name": "Current Setpoint" },
-      "max_current": { "name": "Max Current" },
-      "connection_time": { "name": "Connection Time" },
-      "error_code": { "name": "Error Code" }
+      "voltage_l1": {
+        "name": "Voltage L1"
+      },
+      "voltage_l2": {
+        "name": "Voltage L2"
+      },
+      "voltage_l3": {
+        "name": "Voltage L3"
+      },
+      "current_l1": {
+        "name": "Current L1"
+      },
+      "current_l2": {
+        "name": "Current L2"
+      },
+      "current_l3": {
+        "name": "Current L3"
+      },
+      "active_power": {
+        "name": "Active Power"
+      },
+      "reactive_power": {
+        "name": "Reactive Power"
+      },
+      "apparent_power": {
+        "name": "Apparent Power"
+      },
+      "total_energy": {
+        "name": "Total Energy"
+      },
+      "session_energy": {
+        "name": "Session Energy"
+      },
+      "current_setpoint": {
+        "name": "Current Setpoint"
+      },
+      "max_current": {
+        "name": "Max Current"
+      },
+      "connection_time": {
+        "name": "Connection Time"
+      },
+      "error_code": {
+        "name": "Error Code"
+      }
     },
     "binary_sensor": {
-      "connected": { "name": "Connected" },
-      "charging": { "name": "Charging" },
-      "error": { "name": "Error" }
+      "connected": {
+        "name": "Connected"
+      },
+      "charging": {
+        "name": "Charging"
+      },
+      "error": {
+        "name": "Error"
+      }
     },
     "switch": {
-      "charging_release": { "name": "Charging Release" },
-      "availability": { "name": "Available" }
+      "charging_release": {
+        "name": "Charging Release"
+      },
+      "availability": {
+        "name": "Available"
+      }
     },
     "number": {
-      "max_current": { "name": "Max Current" },
-      "dynamic_max_current_number": { "name": "Group Dynamic Max Current" }
+      "max_current": {
+        "name": "Max Current"
+      },
+      "dynamic_max_current_number": {
+        "name": "Group Dynamic Max Current"
+      }
+    }
+  },
+  "exceptions": {
+    "connection_in_use": {
+      "message": "Another integration already uses this controller with different Modbus connection settings."
+    },
+    "update_failed": {
+      "message": "Cannot reach the CHARX controller: {error}"
+    },
+    "nothing_answered": {
+      "message": "The CHARX controller answered no read of this update."
+    },
+    "write_failed": {
+      "message": "Writing {what} failed: {error}"
+    },
+    "charging_point_missing": {
+      "message": "The controller doesn't report Charging Point {number}."
     }
   }
 }

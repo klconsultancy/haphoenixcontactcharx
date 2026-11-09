@@ -12,7 +12,7 @@ Integrates CHARX SEC-3xxx EV charging controllers into Home Assistant via Modbus
 - **Group level**: total active power, per-phase group current, active session count, dynamic max current for load management
 - Supports up to **12 charging points** per controller group (auto-detected at setup)
 
-Powered by [`aiophoenixcontactcharx`](https://github.com/klconsultancy/aiophoenixcontactcharx).
+Powered by [`aiophoenixcontactcharx`](https://github.com/klconsultancy/aiophoenixcontactcharx), over Home Assistant's own Modbus connection handling (the `modbus` integration). Requires Home Assistant 2026.10 or later.
 
 ---
 
@@ -99,11 +99,14 @@ Before adding the integration, configure these in the CHARX **Web-Based Manageme
 - Verify Modbus server is running: WBM → System Control → Status
 - Check HA logs: search for `phoenixcontact_charx`
 
-**Charging release switch has no effect**
-- The charging point release mode must be set to **Modbus** in WBM. Other modes (OCPP, Permanent, Whitelist) ignore Modbus write commands.
+**Charging release and availability switches are unavailable**
+- They need the charging point's release mode set to **Modbus** in WBM. In any other mode (OCPP, Permanent, Whitelist) the controller ignores them, so the integration shows them as unavailable rather than as switches that do nothing; the log says which release mode the charging point is in.
+- With an OCPP backend that authorizes the sessions, limit the charging current with **Dynamic Max Current** instead: it works in every release mode.
 
 **Sensors show "unavailable"**
 - The controller may be temporarily unreachable. Check the ERR LED and WBM dashboard.
+- One charging point can be unavailable while the others work: each part of the controller is read on its own, and the log names the part that failed.
+- A register the controller refuses reads as "unknown" rather than taking its charging point down; the integration tries it again an hour later.
 - If the controller is in a client/server group, only connect HA to the **server** (highest-level CHARX SEC-3xxx).
 
 ## Recovery
@@ -111,7 +114,7 @@ Before adding the integration, configure these in the CHARX **Web-Based Manageme
 If the integration fails to load after a restart:
 
 1. Open `home-assistant.log` and search for `phoenixcontact_charx`
-2. Common causes: `ImportError` (library not installed — run `pip install aiophoenixcontactcharx`), `ConfigEntryError` (device unreachable at startup — check network)
+2. Common causes: `ImportError` (library not installed), "Another integration already uses this controller" (another integration connects to the same address with different Modbus settings), or the device being unreachable at startup (the integration retries; check the network)
 3. Remove and re-add the integration via Settings → Integrations if config entry data is corrupted
 
 ---

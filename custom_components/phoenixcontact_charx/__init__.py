@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, Platform
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
+from typing import TYPE_CHECKING
 
-from .const import DOMAIN
-from .coordinator import CharxCoordinator
+from aiophoenixcontactcharx import CharxController
+from homeassistant.components.modbus import async_get_unit
+from homeassistant.const import CONF_HOST, CONF_PORT, Platform
+from homeassistant.exceptions import ConfigEntryError, HomeAssistantError
+from homeassistant.helpers import device_registry as dr
+from modbus_connection import ModbusTcpParams
+
+from .const import DOMAIN, MANUFACTURER, UNIT_ID
+from .coordinator import CharxConfigEntry, CharxCoordinator
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
+__all__ = ["CharxConfigEntry"]
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -17,33 +26,45 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH,
 ]
 
-type CharxConfigEntry = ConfigEntry[CharxCoordinator]
-
 
 async def async_setup_entry(hass: HomeAssistant, entry: CharxConfigEntry) -> bool:
-    coordinator = CharxCoordinator(hass, entry)
+    """Set up a Charging Controller from a config entry."""
+    try:
+        unit = async_get_unit(
+            hass,
+            entry,
+            ModbusTcpParams(host=entry.data[CONF_HOST], port=entry.data[CONF_PORT]),
+            UNIT_ID,
+        )
+    except HomeAssistantError as err:
+        # Another integration holds the address with other link settings; retrying won't.
+        raise ConfigEntryError(
+            translation_domain=DOMAIN, translation_key="connection_in_use"
+        ) from err
+
+    coordinator = CharxCoordinator(hass, entry, CharxController(unit))
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
 
-    # Pre-register the hub device so that charging point entities can reference
-    # it via via_device_id even when platforms are set up concurrently.
-    hub_device = dr.async_get(hass).async_get_or_create(
+    # Register the hub first, so the Charging Point devices can point at it with
+    # via_device_id even when the platforms set up concurrently.
+    info = coordinator.controller.device_info
+    name = info.designation or "CHARX SEC"
+    hub = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, coordinator.device_id)},
-        name=coordinator.data.device_info.designation or "CHARX SEC",
-        manufacturer="Phoenix Contact",
-        model=coordinator.data.device_info.designation or "CHARX SEC",
-        sw_version=coordinator.data.device_info.software_version,
+        name=name,
+        manufacturer=MANUFACTURER,
+        model=name,
+        sw_version=info.software_version,
         configuration_url=f"http://{entry.data[CONF_HOST]}",
     )
-    coordinator.hub_device_id = hub_device.id
+    coordinator.hub_device_id = hub.id
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: CharxConfigEntry) -> bool:
-    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unloaded:
-        await entry.runtime_data.client.disconnect()
-    return unloaded
+    """Unload a config entry; the modbus integration closes the connection."""
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

@@ -2,24 +2,23 @@
 
 from __future__ import annotations
 
-import logging
+from typing import TYPE_CHECKING
 
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.const import UnitOfElectricCurrent
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import CharxConfigEntry
 from .const import MAX_CURRENT_A, MIN_CURRENT_A
-from .coordinator import CharxCoordinator
 from .entity import CharxChargingPointEntity, CharxEntity
 
-_LOGGER = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
+    from .coordinator import CharxConfigEntry, CharxCoordinator
 
 
 class CharxMaxCurrentNumber(CharxChargingPointEntity, NumberEntity):
-    """Number entity to set the maximum charging current for one charging point."""
+    """The maximum charging current of one Charging Point (x301)."""
 
     _attr_translation_key = "max_current"
     _attr_device_class = NumberDeviceClass.CURRENT
@@ -30,28 +29,27 @@ class CharxMaxCurrentNumber(CharxChargingPointEntity, NumberEntity):
     _attr_native_step = 1.0
 
     def __init__(self, coordinator: CharxCoordinator, charging_point: int) -> None:
+        """Control the maximum current of Charging Point ``charging_point``."""
         super().__init__(coordinator, charging_point, "max_current_number")
 
     @property
     def native_value(self) -> float | None:
-        cp_data = self._cp_data
-        return float(cp_data.control.max_current_a) if cp_data else None
+        """The current maximum, in A."""
+        cp = self._cp
+        value = None if cp is None else cp.max_current
+        return None if value is None else float(value)
 
     async def async_set_native_value(self, value: float) -> None:
-        current = int(value)
-        try:
-            await self._write_command(
-                self.coordinator.client.set_max_current(self._charging_point, current),
-                f"Failed to set max current on CP{self._charging_point}",
-            )
-        except ValueError as err:
-            message = f"Invalid max current value {current}: {err}"
-            _LOGGER.error(message)
-            raise HomeAssistantError(message) from err
+        """Set the maximum current; the library rejects one outside 6-80 A."""
+        await self._write(lambda: self._require_cp().set_max_current(int(value)), self.entity_id)
 
 
 class CharxDynamicMaxCurrentNumber(CharxEntity, NumberEntity):
-    """Number entity for the group-level dynamic maximum current (load management)."""
+    """The Group's Dynamic Max Current (load management, 167).
+
+    It works in every release mode, so it limits the charging current next to an OCPP
+    backend too. Unknown while no limit is set.
+    """
 
     _attr_translation_key = "dynamic_max_current_number"
     _attr_device_class = NumberDeviceClass.CURRENT
@@ -62,28 +60,30 @@ class CharxDynamicMaxCurrentNumber(CharxEntity, NumberEntity):
     _attr_native_step = 1.0
 
     def __init__(self, coordinator: CharxCoordinator) -> None:
+        """Control the Group's Dynamic Max Current."""
         super().__init__(coordinator, "dynamic_max_current_number")
 
     @property
     def native_value(self) -> float | None:
-        value = self.coordinator.data.device_info.dynamic_max_current_a
-        return float(value) if value is not None else None
+        """The limit, in A; ``None`` while none is set."""
+        value = self._group.dynamic_max_current
+        return None if value is None else float(value)
 
     async def async_set_native_value(self, value: float) -> None:
-        current = int(value)
-        await self._write_command(
-            self.coordinator.client.set_dynamic_max_current(current),
-            "Failed to set dynamic max current on CP group",
-        )
+        """Set the limit."""
+        await self._write(lambda: self._group.set_dynamic_max_current(int(value)), self.entity_id)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    hass: HomeAssistant,  # noqa: ARG001
     entry: CharxConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
+    """Add the Group's Dynamic Max Current and the maximum current of every point."""
     coordinator = entry.runtime_data
     entities: list[NumberEntity] = [CharxDynamicMaxCurrentNumber(coordinator)]
-    for cp in coordinator.charging_point_indices:
-        entities.append(CharxMaxCurrentNumber(coordinator, cp))
+    entities.extend(
+        CharxMaxCurrentNumber(coordinator, cp.number)
+        for cp in coordinator.controller.charging_points
+    )
     async_add_entities(entities)
