@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.0.0](https://github.com/klconsultancy/haphoenixcontactcharx/compare/v2.0.0-rc.1...v2.0.0) (2026-11-10)
+
+
+### Bug Fixes
+
+* show the Max Current number as unknown while the controller reads 0 ([#51](https://github.com/klconsultancy/haphoenixcontactcharx/issues/51)) ([16ea6e4](https://github.com/klconsultancy/haphoenixcontactcharx/commit/16ea6e4ef954c4831477df733055f4c50757d571))
+
+
+### Miscellaneous Chores
+
+* release 2.0.0 on aiophoenixcontactcharx 2.0.0 ([5f9c5cd](https://github.com/klconsultancy/haphoenixcontactcharx/commit/5f9c5cde92d963280faa12abd829c1d7a039ac61))
+
 ## [2.0.0-rc.1](https://github.com/klconsultancy/haphoenixcontactcharx/compare/v1.0.2...v2.0.0-rc.1) (2026-11-09)
 
 
