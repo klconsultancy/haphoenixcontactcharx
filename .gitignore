@@ -6,3 +6,6 @@ __pycache__/
 ha-config/*
 !ha-config/configuration.yaml
 .coverage
+
+# graphify knowledge graphs: local, rebuilt on demand
+graphify-out/
