@@ -1,4 +1,4 @@
-aiophoenixcontactcharx==2.0.0rc1
+aiophoenixcontactcharx==2.0.0
 pytest-homeassistant-custom-component==0.13.375
 pytest-cov==7.1.0
 # The requirements of Home Assistant's modbus integration, at the versions the Home
