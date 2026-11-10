@@ -78,7 +78,7 @@ Before adding the integration, configure these in the CHARX **Web-Based Manageme
 | Error | Binary sensor | Status E or F |
 | Charging Release | Switch | Enable/disable charging (Modbus release mode required) |
 | Available | Switch | Set availability / status F (Modbus release mode required) |
-| Max Current | Number | 6–80 A slider |
+| Max Current | Number | 6–80 A slider; unknown while no maximum is set over Modbus (the controller reads 0, as in release mode OCPP) |
 
 ### Group (`CHARX SEC`)
 

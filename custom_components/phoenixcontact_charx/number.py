@@ -34,10 +34,14 @@ class CharxMaxCurrentNumber(CharxChargingPointEntity, NumberEntity):
 
     @property
     def native_value(self) -> float | None:
-        """The current maximum, in A."""
+        """The current maximum, in A; ``None`` while none is set.
+
+        The controller reads 0 while no maximum is set over Modbus, as in release mode
+        OCPP. That is below the 6 A minimum, so no value a user can set: unknown.
+        """
         cp = self._cp
         value = None if cp is None else cp.max_current
-        return None if value is None else float(value)
+        return None if not value else float(value)
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the maximum current; the library rejects one outside 6-80 A."""

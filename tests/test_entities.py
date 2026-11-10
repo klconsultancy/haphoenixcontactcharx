@@ -329,6 +329,18 @@ async def test_the_max_current(
     assert float(state(hass, "number", "cp1_max_current_number").state) == 10
 
 
+@pytest.mark.usefixtures("real_unit", "unit")
+async def test_a_max_current_of_zero_is_unknown(
+    hass: HomeAssistant, real_entry: MockConfigEntry
+) -> None:
+    # In release mode OCPP the controller reads 0 for x301: no maximum set over Modbus.
+    await set_up(hass, real_entry)
+
+    assert state(hass, "number", "cp1_max_current_number", REAL_MAC).state == STATE_UNKNOWN
+    # The sensor keeps showing the register, as in 1.x.
+    assert state(hass, "sensor", "cp1_max_current", REAL_MAC).state == "0"
+
+
 @pytest.mark.usefixtures("unit")
 async def test_the_dynamic_max_current_in_release_mode_ocpp(
     hass: HomeAssistant, real_entry: MockConfigEntry, real_unit: MockModbusUnit
