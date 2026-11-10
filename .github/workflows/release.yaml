@@ -9,10 +9,6 @@ name: Release
 # "release tags" ruleset): it becomes a GitHub pre-release, which HACS offers to users
 # who enabled beta versions, so it can be tested before the release pull request is
 # merged.
-# release-please doesn't see it, so the notes of the release after it still list every
-# change since the last release. Don't make a release candidate with release-as and
-# prerelease: release-please would then count it as the previous release and leave its
-# changes out of the final release's notes, which HACS shows at the update.
 on:
   push:
     branches: [main]
