@@ -3,12 +3,14 @@ name: Release
 # release-please keeps a release pull request open with the next version and its
 # changelog, from the Conventional Commits titles on main, and raises the version in
 # manifest.json with it. Merging it tags the release and creates the GitHub release,
-# which is what HACS offers to users.
+# which is what HACS offers to users. Both run in the organization's reusable workflow,
+# as the release app, which may also create the version tags the "release tags" ruleset
+# protects.
 #
 # A release candidate is a tag such as v1.2.3-rc.1 on main, pushed by an admin (the
-# "release tags" ruleset): it becomes a GitHub pre-release, which HACS offers to users
-# who enabled beta versions, so it can be tested before the release pull request is
-# merged.
+# "release tags" ruleset): the reusable workflow turns it into a GitHub pre-release,
+# which HACS offers to users who enabled beta versions, so it can be tested before the
+# release pull request is merged.
 on:
   push:
     branches: [main]
@@ -17,37 +19,11 @@ on:
 permissions: {}
 
 jobs:
-  release-please:
-    name: Release PR
-    if: github.ref_type == 'branch'
-    runs-on: ubuntu-latest
-    steps:
-      # A GitHub App token instead of GITHUB_TOKEN, so CI runs on the release PR. The
-      # app may also create the version tags the "release tags" ruleset protects.
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        id: app-token
-        with:
-          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-
-  release-candidate:
-    name: Release candidate
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # the pre-release
-    steps:
-      - env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
-        # release-please also tags a release candidate it releases itself (release-as
-        # with prerelease), and creates its release first: leave that one be.
-        run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $TAG exists already."
-            exit 0
-          fi
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --generate-notes --title "$TAG"
+  release:
+    permissions: {} # both jobs act as the app
+    uses: klconsultancy/workflows/.github/workflows/release-please.yml@c9502596494c47704b890d5cc66de73c06ba93d8 # main
+    with:
+      app-client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+      release-candidates: true
+    secrets:
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
