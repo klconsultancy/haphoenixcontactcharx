@@ -2,7 +2,8 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended",
-    "helpers:pinGitHubActionDigests"
+    "helpers:pinGitHubActionDigests",
+    "github>klconsultancy/workflows:shared-workflows"
   ],
   "description": "Updates come on the 1st and the 15th, grouped, and are merged once main's required checks pass, unless they raise a major version. release-please collects the fix(deps) ones in the release pull request, which is merged by hand.",
   "timezone": "Europe/Brussels",
@@ -76,7 +77,10 @@
         "github-actions"
       ],
       "semanticCommitType": "ci",
-      "groupName": "actions"
+      "groupName": "actions",
+      "matchPackageNames": [
+        "!klconsultancy/workflows"
+      ]
     },
     {
       "description": "Home Assistant's validation actions have no releases worth following; their branch head's digest is enough.",
